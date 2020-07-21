@@ -24,7 +24,10 @@ class MergerTest extends TestCase
         ');
 
         $merged = Merger::combine(['simple' => $foo, 'bar' => $bar]);
+        $definitions = $merged->definitions;
 
-        self::assertCount(2, $merged->definitions);
+        self::assertCount(2, $definitions);
+        self::assertSame($definitions['MyScalarQuery'], $foo->definitions[0]);
+        self::assertSame($definitions['Bar'], $bar->definitions[0]);
     }
 }
