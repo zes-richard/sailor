@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Spawnia\Sailor;
 
 use GraphQL\Language\AST\EnumTypeDefinitionNode;
@@ -39,7 +41,7 @@ class StringEnumAdapter implements EnumAdapter
 
     public function serialize($value, string $enumClass): string
     {
-        if (! defined($enumClass . '::' . $value)) {
+        if (! defined($enumClass.'::'.$value)) {
             throw new \InvalidArgumentException('TODO');
         }
 
