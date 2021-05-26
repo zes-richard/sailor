@@ -7,4 +7,12 @@ type Query {
 type SomeObject {
     value: Int
     nested: SomeObject
+    enum: SomeEnum
+}
+
+enum SomeEnum {
+    FOO
+
+    "Description for bar"
+    BAR
 }

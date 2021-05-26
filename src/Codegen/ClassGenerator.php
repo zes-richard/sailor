@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Spawnia\Sailor\Codegen;
 
 use GraphQL\Language\AST\DocumentNode;
+use GraphQL\Language\AST\EnumTypeDefinitionNode;
+use GraphQL\Language\AST\EnumValueDefinitionNode;
 use GraphQL\Language\AST\FieldNode;
 use GraphQL\Language\AST\NodeKind;
 use GraphQL\Language\AST\OperationDefinitionNode;
@@ -270,6 +272,20 @@ class ClassGenerator
 
                             // The namespace moves up a level
                             array_pop($this->namespaceStack);
+                        },
+                    ],
+                    // TODO should this even use the visitor?
+                    NodeKind::ENUM_TYPE_DEFINITION => [
+                        'start' => function (EnumTypeDefinitionNode $enumTypeDefinitionNode): void {
+                            // Create the base template for an enum class and store it as current
+                        },
+                        'leave' => function (EnumTypeDefinitionNode $_): void {
+                            // Finalize the current enum class
+                        },
+                    ],
+                    NodeKind::ENUM_VALUE_DEFINITION => [
+                        'start' => function (EnumValueDefinitionNode $enumValueDefinitionNode): void {
+                            // Add the enum value to the current enum class
                         },
                     ],
                 ]
