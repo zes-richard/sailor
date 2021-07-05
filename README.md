@@ -174,6 +174,8 @@ abstract class TestCase extends PHPUnitTestCase
 }
 ```
 
+Otherwise, mocks are not reset between test methods, you might run into very confusing bugs.
+
 ### Mock results
 
 Mocks are registered per operation class:
@@ -183,7 +185,7 @@ Mocks are registered per operation class:
 $mock = \Example\Api\HelloSailor::mock();
 ```
 
-Now, any subsequent calls to `HelloSailor::execute()` will be passed on to `$mock`.
+When registered, the mock captures all calls to `HelloSailor::execute()`.
 Use it to build up expectations for what calls it should receive and mock returned results:
 
 ```php
@@ -202,6 +204,39 @@ self::assertSame(
     HelloSailor::execute('Sailor')->data->hello
 );
 ```
+
+Subsequent calls to `::mock()` will return the initially registered mock instance.
+
+```php
+$mock1 = HelloSailor::mock();
+$mock2 = HelloSailor::mock();
+assert($mock1 === $mock2); // true
+```
+
+### Integration
+
+If you want to perform integration testing for a service that uses Sailor without actually
+hitting an external API, you can swap out your client with the `Log` client.
+It writes all requests made through Sailor to a file of your choice.
+
+```php
+# sailor.php
+public function makeClient(): Client
+{
+    return new \Spawnia\Sailor\Client\Log(__DIR__ . '/sailor-requests.log');
+}
+```
+
+Each request goes on a new line and contains a JSON string that holds the `query` and `variables`:
+
+```json
+{"query":"{ foo }","variables":{"bar":42}}
+{"query":"mutation { baz }","variables":null}
+```
+
+This allows you to perform assertions on the calls that were made.
+However, the `Log` client can not know what constitutes a valid response for a given response,
+so it always responds with an error.
 
 ## Examples
 
