@@ -69,7 +69,6 @@ class SimpleTest extends TestCase
 
         Configuration::setEndpoint('simple', $endpoint);
 
-        $result = MyScalarQuery::execute();
         self::assertSame($value, $result->data->scalarWithArg);
     }
 

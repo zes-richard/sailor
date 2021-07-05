@@ -6,7 +6,7 @@ namespace Spawnia\Sailor\Simple;
 
 class MyScalarQuery extends \Spawnia\Sailor\Operation
 {
-    public static function execute(?string $arg = null): MyScalarQuery\MyScalarQueryResult
+    public function execute(?string $arg = null): MyScalarQuery\MyScalarQueryResult
     {
         return self::executeOperation(...func_get_args());
     }

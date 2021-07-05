@@ -35,6 +35,14 @@ abstract class Operation
     abstract public static function document(): string;
 
     /**
+     * @return static
+     */
+    public static function withOptions(): self
+    {
+        return new static();
+    }
+
+    /**
      * @param mixed ...$args
      */
     protected static function executeOperation(...$args): Result
