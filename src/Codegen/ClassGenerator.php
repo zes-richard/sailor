@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Spawnia\Sailor\Codegen;
 
 use GraphQL\Language\AST\DocumentNode;
-use GraphQL\Language\AST\EnumTypeDefinitionNode;
 use GraphQL\Language\AST\FieldNode;
 use GraphQL\Language\AST\NodeKind;
 use GraphQL\Language\AST\OperationDefinitionNode;
@@ -332,7 +331,7 @@ class ClassGenerator
     {
         $enumClass = new ClassType(
             $type->name,
-            new PhpNamespace($this->endpointConfig->namespace() . '\\' . 'Types')
+            new PhpNamespace($this->endpointConfig->namespace().'\\'.'Types')
         );
         $adapter = $this->endpointConfig->enumAdapter();
 

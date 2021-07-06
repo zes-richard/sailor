@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Spawnia\Sailor;
 
 use GraphQL\Language\AST\EnumTypeDefinitionNode;
@@ -31,7 +33,7 @@ class LaravelEnumAdapter implements EnumAdapter
 
     public function typeHint(ClassType $enumClass, EnumTypeDefinitionNode $enumTypeDefinitionNode): string
     {
-        return $enumClass->getNamespace()->getName() . '\\' . $enumClass->getName();
+        return $enumClass->getNamespace()->getName().'\\'.$enumClass->getName();
     }
 
     /**
