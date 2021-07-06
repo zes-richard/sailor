@@ -45,17 +45,11 @@ class Generator
         Validator::validate($schema, $document);
 
         $classGenerator = new ClassGenerator($schema, $this->endpointConfig, $this->endpointName);
-        $operationSets = $classGenerator->generate($document);
+        $classes = $classGenerator->generate($document);
 
         $files = [];
-        foreach ($operationSets as $operationSet) {
-            $files [] = $this->makeFile($operationSet->operation);
-            $files [] = $this->makeFile($operationSet->result);
-            $files [] = $this->makeFile($operationSet->errorFreeResult);
-
-            foreach ($operationSet->selectionStorage as $selection) {
-                $files [] = $this->makeFile($selection);
-            }
+        foreach ($classes as $class) {
+            $files [] = $this->makeFile($class);
         }
 
         return $files;
@@ -124,7 +118,7 @@ class Generator
      * @param  array<string, string>  $documents
      * @return array<string, \GraphQL\Language\AST\DocumentNode>
      *
-     * @throws \GraphQL\Error\SyntaxError
+     * @throws \GraphQL\Error\Error
      */
     public static function parseDocuments(array $documents): array
     {
@@ -147,7 +141,7 @@ class Generator
     }
 
     /**
-     * @param  \GraphQL\Language\AST\DocumentNode[]  $parsed
+     * @param  array<string, \GraphQL\Language\AST\DocumentNode>  $parsed
      */
     public static function ensureOperationsAreNamed(array $parsed): void
     {

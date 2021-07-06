@@ -7,20 +7,31 @@ use Nette\PhpGenerator\ClassType;
 
 class LaravelEnumAdapter implements EnumAdapter
 {
-    public function define(ClassType $enumClass, EnumTypeDefinitionNode $enumTypeDefinitionNode): array
+    public function define(ClassType $enumClass, EnumTypeDefinitionNode $enumTypeDefinitionNode): ClassType
     {
-        $enumClass->addImplement('Bensampo\Enum');
+        $enumClass->addImplement('BenSampo\Enum\Enum');
 
         $magicInstantiationMethods = '';
         foreach ($enumTypeDefinitionNode->values as $enumValue) {
-            $enumClass->addConstant(...);
-            $magicInstantiationMethods .= '@method static static ' . $enumValue->name->value . '()';
+            $name = $enumValue->name->value;
+            $constant = $enumClass->addConstant($name, $name);
+
+            $description = $enumValue->description;
+            if (null !== $description) {
+                $constant->addComment($description->value);
+            }
+
+            $magicInstantiationMethods .= "@method static static {$name}()";
         }
 
-        return [
-            $enumClass->getName(),
-            $enumClass,
-        ];
+        $enumClass->addComment($magicInstantiationMethods);
+
+        return $enumClass;
+    }
+
+    public function typeHint(ClassType $enumClass, EnumTypeDefinitionNode $enumTypeDefinitionNode): string
+    {
+        return $enumClass->getNamespace()->getName() . '\\' . $enumClass->getName();
     }
 
     /**

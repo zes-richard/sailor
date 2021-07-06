@@ -23,7 +23,7 @@ abstract class TypedObject
             } else {
                 // The ClassGenerator placed methods for each property that return
                 // a callable, which can map a value to its internal type
-                $methodName = Codegen\FieldTypeMapper::methodName($field);
+                $methodName = FieldTypeMapper::methodName($field);
 
                 $thisFunctionItself = __FUNCTION__;
                 $availableMethods = array_filter(

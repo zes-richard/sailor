@@ -15,6 +15,11 @@ interface EnumAdapter
     public function define(ClassType $enumClass, EnumTypeDefinitionNode $enumTypeDefinitionNode): ClassType;
 
     /**
+     * The type hint to use in arguments of Operation::execute() and generated result classes.
+     */
+    public function typeHint(ClassType $enumClass, EnumTypeDefinitionNode $enumTypeDefinitionNode): string;
+
+    /**
      * Parse the raw enum value from the API.
      *
      * @param class-string $enumClass Fully qualified class name of the generated enum class
@@ -27,9 +32,4 @@ interface EnumAdapter
      * @param class-string $enumClass Fully qualified class name of the generated enum class
      */
     public function serialize($value, string $enumClass): string;
-
-    /**
-     * The type hint to use in arguments of Operation::execute() and generated result classes.
-     */
-    public function typeHint(ClassType $enumClass, EnumTypeDefinitionNode $enumTypeDefinitionNode): string;
 }

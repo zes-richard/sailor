@@ -10,7 +10,7 @@ use Nette\PhpGenerator\ClassType;
 
 class StringEnumAdapter implements EnumAdapter
 {
-    public function define(ClassType $enumClass, EnumTypeDefinitionNode $enumTypeDefinitionNode): array
+    public function define(ClassType $enumClass, EnumTypeDefinitionNode $enumTypeDefinitionNode): ClassType
     {
         $description = $enumTypeDefinitionNode->description;
         if (null !== $description) {
@@ -28,10 +28,12 @@ class StringEnumAdapter implements EnumAdapter
             }
         }
 
-        return [
-            'string',
-            $enumClass,
-        ];
+        return $enumClass;
+    }
+
+    public function typeHint(ClassType $enumClass, EnumTypeDefinitionNode $enumTypeDefinitionNode): string
+    {
+        return 'string';
     }
 
     public function parse(string $value, string $enumClass): string
@@ -42,7 +44,7 @@ class StringEnumAdapter implements EnumAdapter
     public function serialize($value, string $enumClass): string
     {
         if (! defined($enumClass.'::'.$value)) {
-            throw new \InvalidArgumentException('TODO');
+            throw new \InvalidArgumentException("Could not serialize {$value} as an enum of class {$enumClass}.");
         }
 
         return $value;

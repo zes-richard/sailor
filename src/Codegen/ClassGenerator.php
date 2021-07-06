@@ -6,7 +6,6 @@ namespace Spawnia\Sailor\Codegen;
 
 use GraphQL\Language\AST\DocumentNode;
 use GraphQL\Language\AST\EnumTypeDefinitionNode;
-use GraphQL\Language\AST\EnumValueDefinitionNode;
 use GraphQL\Language\AST\FieldNode;
 use GraphQL\Language\AST\NodeKind;
 use GraphQL\Language\AST\OperationDefinitionNode;
@@ -45,9 +44,14 @@ class ClassGenerator
     protected OperationStack $operationStack;
 
     /**
-     * @var array<int, OperationStack>
+     * @var array<string, ClassType>
      */
-    protected array $operationStorage = [];
+    protected array $types = [];
+
+    /**
+     * @var array<int, ClassType>
+     */
+    protected array $classes = [];
 
     /**
      * @var array<int, string>
@@ -63,10 +67,12 @@ class ClassGenerator
     }
 
     /**
-     * @return array<int, OperationStack>
+     * @return array<int, ClassType>
      */
     public function generate(DocumentNode $document): array
     {
+        $this->defineTypeClasses();
+
         $typeInfo = new TypeInfo($this->schema);
 
         Visitor::visit(
@@ -171,7 +177,9 @@ class ClassGenerator
                         },
                         'leave' => function (OperationDefinitionNode $_): void {
                             // Store the current operation as we continue with the next one
-                            $this->operationStorage [] = $this->operationStack;
+                            foreach ($this->operationStack->classes() as $class) {
+                                $this->classes [] = $class;
+                            }
                         },
                     ],
                     NodeKind::VARIABLE_DEFINITION => [
@@ -197,7 +205,9 @@ class ClassGenerator
                             } elseif ($type instanceof ScalarType) {
                                 $parameter->setType(PhpType::forScalar($type));
                             } elseif ($type instanceof EnumType) {
-                                $parameter->setType(PhpType::forEnum($type));
+                                $enumAdapter = $this->endpointConfig->enumAdapter();
+                                $typeHint = $enumAdapter->typeHint($this->types[$type->name], $type);
+                                $parameter->setType($typeHint);
                             } elseif ($type instanceof InputObjectType) {
                                 // TODO create value objects to allow typing inputs strictly
                                 $parameter->setType('\stdClass');
@@ -274,25 +284,11 @@ class ClassGenerator
                             array_pop($this->namespaceStack);
                         },
                     ],
-                    // TODO should this even use the visitor?
-                    NodeKind::ENUM_TYPE_DEFINITION => [
-                        'start' => function (EnumTypeDefinitionNode $enumTypeDefinitionNode): void {
-                            // Create the base template for an enum class and store it as current
-                        },
-                        'leave' => function (EnumTypeDefinitionNode $_): void {
-                            // Finalize the current enum class
-                        },
-                    ],
-                    NodeKind::ENUM_VALUE_DEFINITION => [
-                        'start' => function (EnumValueDefinitionNode $enumValueDefinitionNode): void {
-                            // Add the enum value to the current enum class
-                        },
-                    ],
                 ]
             )
         );
 
-        return $this->operationStorage;
+        return $this->types + $this->classes;
     }
 
     protected function makeTypedObject(string $name): ClassType
@@ -321,5 +317,25 @@ class ClassGenerator
     protected function currentNamespace(): string
     {
         return implode('\\', $this->namespaceStack);
+    }
+
+    protected function defineTypeClasses(): void
+    {
+        foreach ($this->schema->getTypeMap() as $type) {
+            if ($type instanceof EnumType) {
+                $this->types[$type->name] = $this->defineEnumTypeClass($type);
+            }
+        }
+    }
+
+    protected function defineEnumTypeClass(EnumType $type): ClassType
+    {
+        $enumClass = new ClassType(
+            $type->name,
+            new PhpNamespace($this->endpointConfig->namespace() . '\\' . 'Types')
+        );
+        $adapter = $this->endpointConfig->enumAdapter();
+
+        return $adapter->define($enumClass, $type);
     }
 }

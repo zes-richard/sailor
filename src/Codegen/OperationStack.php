@@ -63,4 +63,13 @@ class OperationStack
 
         $execute->setParameters($parameters);
     }
+
+    public function classes(): array
+    {
+        return [
+            $this->operation,
+            $this->result,
+            $this->errorFreeResult,
+        ] + $this->selectionStorage;
+    }
 }
