@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Spawnia\Sailor\Simple;
 
-class MyScalarQuery extends \Spawnia\Sailor\Operation
+use Spawnia\Sailor\Operation;
+
+class MyScalarQuery extends Operation
 {
     public static function execute(?string $arg = null): MyScalarQuery\MyScalarQueryResult
     {

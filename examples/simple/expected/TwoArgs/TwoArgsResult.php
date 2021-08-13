@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Spawnia\Sailor\Simple\TwoArgs;
 
-class TwoArgsResult extends \Spawnia\Sailor\Result
+use Spawnia\Sailor\Result;
+use stdClass;
+
+class TwoArgsResult extends Result
 {
     public ?TwoArgs $data;
 
-    protected function setData(\stdClass $data): void
+    protected function setData(stdClass $data): void
     {
         $this->data = TwoArgs::fromStdClass($data);
     }

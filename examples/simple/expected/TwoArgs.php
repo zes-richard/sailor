@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Spawnia\Sailor\Simple;
 
-class TwoArgs extends \Spawnia\Sailor\Operation
+use Spawnia\Sailor\Operation;
+
+class TwoArgs extends Operation
 {
     public static function execute(?string $first = null, ?int $second = null): TwoArgs\TwoArgsResult
     {

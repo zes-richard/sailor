@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Spawnia\Sailor\Codegen;
 
+use Exception;
 use GraphQL\Language\AST\DocumentNode;
 use GraphQL\Language\AST\FieldNode;
 use GraphQL\Language\AST\NodeKind;
@@ -24,13 +25,16 @@ use GraphQL\Type\Definition\Type;
 use GraphQL\Type\Schema;
 use GraphQL\Utils\TypeInfo;
 use Nette\PhpGenerator\ClassType;
+use Nette\PhpGenerator\Helpers;
 use Nette\PhpGenerator\Parameter;
 use Nette\PhpGenerator\PhpNamespace;
 use Spawnia\Sailor\EndpointConfig;
 use Spawnia\Sailor\ErrorFreeResult;
+use Spawnia\Sailor\Mapper\DirectMapper;
 use Spawnia\Sailor\Operation;
 use Spawnia\Sailor\Result;
 use Spawnia\Sailor\TypedObject;
+use stdClass;
 
 class ClassGenerator
 {
@@ -88,6 +92,7 @@ class ClassGenerator
                             $operation = new ClassType($operationName, $this->makeNamespace());
 
                             // The base class contains most of the logic
+                            $this->ensureUse($operation, Operation::class);
                             $operation->setExtends(Operation::class);
 
                             // The execute method is the public API of the operation
@@ -128,12 +133,14 @@ class ClassGenerator
                             );
 
                             $result = new ClassType($resultName, $this->makeNamespace());
+                            $this->ensureUse($result, Result::class);
                             $result->setExtends(Result::class);
 
                             $setData = $result->addMethod('setData');
                             $setData->setVisibility('protected');
                             $dataParam = $setData->addParameter('data');
-                            $dataParam->setType('\\stdClass');
+                            $this->ensureUse($result, stdClass::class);
+                            $dataParam->setType(stdClass::class);
                             $setData->setReturnType('void');
                             $setData->setBody(<<<PHP
                             \$this->data = {$operationName}::fromStdClass(\$data);
@@ -159,6 +166,7 @@ class ClassGenerator
                             );
 
                             $errorFreeResult = new ClassType($errorFreeResultName, $this->makeNamespace());
+                            $this->ensureUse($errorFreeResult, ErrorFreeResult::class);
                             $errorFreeResult->setExtends(ErrorFreeResult::class);
 
                             $errorFreeDataProp = $errorFreeResult->addProperty('data');
@@ -211,7 +219,7 @@ class ClassGenerator
                                 // TODO create value objects to allow typing inputs strictly
                                 $parameter->setType('\stdClass');
                             } else {
-                                throw new \Exception('Unsupported type: '.get_class($type));
+                                throw new Exception('Unsupported type: '.get_class($type));
                             }
 
                             $this->operationStack->addParameterToOperation($parameter);
@@ -242,28 +250,34 @@ class ClassGenerator
                                 $this->operationStack->pushSelection(
                                     $this->makeTypedObject($typedObjectName)
                                 );
+                                $this->ensureUse($selection, TypedObject::class);
+                                $this->ensureUse($selection, $typeReference);
+                                $this->ensureUse($selection, stdClass::class);
                                 $typeMapper = <<<PHP
-                                static function (\\stdClass \$value): \Spawnia\Sailor\TypedObject {
-                                    return {$typeReference}::fromStdClass(\$value);
+                                static function (stdClass \$value): TypedObject {
+                                    return {$typedObjectName}::fromStdClass(\$value);
                                 }
                                 PHP;
                             } elseif ($namedType instanceof ScalarType) {
                                 $typeReference = PhpType::forScalar($namedType);
+                                $this->ensureUse($selection, DirectMapper::class);
                                 $typeMapper = <<<PHP
-                                new \Spawnia\Sailor\Mapper\DirectMapper()
+                                new DirectMapper()
                                 PHP;
                             } elseif ($namedType instanceof EnumType) {
                                 $typeReference = PhpType::forEnum($namedType);
+                                $this->ensureUse($selection, DirectMapper::class);
                                 // TODO consider mapping from enum instances
                                 $typeMapper = <<<PHP
-                                new \Spawnia\Sailor\Mapper\DirectMapper()
+                                new DirectMapper()
                                 PHP;
                             } else {
-                                throw new \Exception('Unsupported type '.get_class($namedType).' found.');
+                                throw new Exception('Unsupported type '.get_class($namedType).' found.');
                             }
 
                             $fieldProperty = $selection->addProperty($fieldName);
-                            $fieldProperty->setComment('@var '.PhpType::phpDoc($type, $typeReference));
+                            $typeParts     = explode('\\', $typeReference);
+                            $fieldProperty->setComment('@var ' . PhpType::phpDoc($type, array_pop($typeParts)));
 
                             $fieldTypeMapper = $selection->addMethod(FieldTypeMapper::methodName($fieldName));
                             $fieldTypeMapper->setReturnType('callable');
@@ -296,6 +310,7 @@ class ClassGenerator
             $name,
             $this->makeNamespace()
         );
+        $this->ensureUse($typedObject, TypedObject::class);
         $typedObject->addExtend(TypedObject::class);
 
         return $typedObject;
@@ -336,5 +351,16 @@ class ClassGenerator
         $adapter = $this->endpointConfig->enumAdapter();
 
         return $adapter->define($enumClass, $type);
+    }
+
+    /**
+     * @param ClassType $class
+     * @param string    $name
+     */
+    protected function ensureUse(ClassType $class, string $name): void
+    {
+        if (! isset($class->getNamespace()->getUses()[Helpers::extractShortName($name)])) {
+            $class->getNamespace()->addUse($name);
+        }
     }
 }

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Spawnia\Sailor\Simple\MyScalarQuery;
 
-class MyScalarQueryErrorFreeResult extends \Spawnia\Sailor\ErrorFreeResult
+use Spawnia\Sailor\ErrorFreeResult;
+
+class MyScalarQueryErrorFreeResult extends ErrorFreeResult
 {
     public MyScalarQuery $data;
 }

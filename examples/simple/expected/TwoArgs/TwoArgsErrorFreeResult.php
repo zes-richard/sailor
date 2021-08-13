@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Spawnia\Sailor\Simple\TwoArgs;
 
-class TwoArgsErrorFreeResult extends \Spawnia\Sailor\ErrorFreeResult
+use Spawnia\Sailor\ErrorFreeResult;
+
+class TwoArgsErrorFreeResult extends ErrorFreeResult
 {
     public TwoArgs $data;
 }

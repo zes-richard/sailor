@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Spawnia\Sailor\Simple\MyObjectQuery;
 
-class MyObjectQueryErrorFreeResult extends \Spawnia\Sailor\ErrorFreeResult
+use Spawnia\Sailor\ErrorFreeResult;
+
+class MyObjectQueryErrorFreeResult extends ErrorFreeResult
 {
     public MyObjectQuery $data;
 }

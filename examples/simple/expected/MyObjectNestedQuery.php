@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Spawnia\Sailor\Simple;
 
-class MyObjectNestedQuery extends \Spawnia\Sailor\Operation
+use Spawnia\Sailor\Operation;
+
+class MyObjectNestedQuery extends Operation
 {
     public static function execute(): MyObjectNestedQuery\MyObjectNestedQueryResult
     {

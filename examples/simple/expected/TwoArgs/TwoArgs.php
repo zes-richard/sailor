@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Spawnia\Sailor\Simple\TwoArgs;
 
-class TwoArgs extends \Spawnia\Sailor\TypedObject
+use Spawnia\Sailor\Mapper\DirectMapper;
+use Spawnia\Sailor\TypedObject;
+
+class TwoArgs extends TypedObject
 {
     /** @var string|null */
     public $twoArgs;
 
     public function twoArgsTypeMapper(): callable
     {
-        return new \Spawnia\Sailor\Mapper\DirectMapper();
+        return new DirectMapper();
     }
 }
