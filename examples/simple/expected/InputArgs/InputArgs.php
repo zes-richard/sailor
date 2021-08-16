@@ -9,10 +9,15 @@ use Spawnia\Sailor\TypedObject;
 
 class InputArgs extends TypedObject
 {
-    public ?string $inputArgs;
+    protected ?string $inputArgs;
 
     public function inputArgsTypeMapper(): callable
     {
         return new DirectMapper();
+    }
+
+    public function getInputArgs(): ?string
+    {
+        return $this->inputArgs;
     }
 }

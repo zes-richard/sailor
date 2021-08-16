@@ -7,24 +7,31 @@ namespace Spawnia\Sailor\Codegen;
 use Exception;
 use GraphQL\Language\AST\DocumentNode;
 use GraphQL\Language\AST\FieldNode;
+use GraphQL\Language\AST\FragmentDefinitionNode;
+use GraphQL\Language\AST\FragmentSpreadNode;
+use GraphQL\Language\AST\InlineFragmentNode;
+use GraphQL\Language\AST\NameNode;
+use GraphQL\Language\AST\Node;
 use GraphQL\Language\AST\NodeKind;
+use GraphQL\Language\AST\NodeList;
 use GraphQL\Language\AST\OperationDefinitionNode;
 use GraphQL\Language\AST\SelectionSetNode;
 use GraphQL\Language\AST\VariableDefinitionNode;
 use GraphQL\Language\Printer;
+use GraphQL\Language\Token;
 use GraphQL\Language\Visitor;
 use GraphQL\Type\Definition\CustomScalarType;
 use GraphQL\Type\Definition\EnumType;
-use GraphQL\Type\Definition\IDType;
 use GraphQL\Type\Definition\InputObjectType;
 use GraphQL\Type\Definition\InputType;
+use GraphQL\Type\Definition\InterfaceType;
 use GraphQL\Type\Definition\ListOfType;
 use GraphQL\Type\Definition\NonNull;
 use GraphQL\Type\Definition\ObjectType;
 use GraphQL\Type\Definition\OutputType;
 use GraphQL\Type\Definition\ScalarType;
-use GraphQL\Type\Definition\StringType;
 use GraphQL\Type\Definition\Type;
+use GraphQL\Type\Definition\UnionType;
 use GraphQL\Type\Schema;
 use GraphQL\Utils\TypeInfo;
 use JsonSerializable;
@@ -32,6 +39,8 @@ use Nette\PhpGenerator\ClassType;
 use Nette\PhpGenerator\Helpers;
 use Nette\PhpGenerator\Parameter;
 use Nette\PhpGenerator\PhpNamespace;
+use Nette\PhpGenerator\Property;
+use RuntimeException;
 use Spawnia\Sailor\EndpointConfig;
 use Spawnia\Sailor\ErrorFreeResult;
 use Spawnia\Sailor\InputSerializer;
@@ -81,7 +90,8 @@ class ClassGenerator
     {
         $this->defineTypeClasses();
 
-        $typeInfo = new TypeInfo($this->schema);
+        $typeInfo    = new TypeInfo($this->schema);
+        $definitions = $document->definitions;
 
         Visitor::visit(
             $document,
@@ -122,7 +132,28 @@ class ClassGenerator
                             $document = $operation->addMethod('document');
                             $document->setStatic();
                             $document->setReturnType('string');
-                            $operationString = Printer::doPrint($operationDefinition);
+                            $clone = (clone $operationDefinition)->cloneDeep();
+                            Visitor::visit($clone, [
+                                NodeKind::SELECTION_SET => ['enter' => function (SelectionSetNode $node) {
+                                    foreach ($node->selections as $selection) {
+                                        if ($selection instanceof InlineFragmentNode) {
+                                            $fieldNode        = new FieldNode([
+                                                'name'         => new NameNode([
+                                                    'value' => '__typename',
+                                                    'loc'   => null,
+                                                ]),
+                                                'arguments'    => new NodeList([]),
+                                                'directives'   => new NodeList([]),
+                                                'selectionSet' => null,
+                                                'loc'          => null,
+                                            ]);
+                                            $node->selections = $node->selections->merge([$fieldNode]);
+                                            break;
+                                        }
+                                    }
+                                }],
+                            ]);
+                            $operationString = Printer::doPrint($clone);
                             $document->setBody(<<<PHP
                             return /* @lang GraphQL */ '{$operationString}';
                             PHP
@@ -247,11 +278,10 @@ class ClassGenerator
                                 $typeReference = PhpType::forScalar($type);
                                 $parameter->setType($typeReference);
                             } elseif ($type instanceof EnumType) {
-                                $enumAdapter = $this->endpointConfig->enumAdapter();
+                                $enumAdapter   = $this->endpointConfig->enumAdapter();
                                 $typeReference = $enumAdapter->typeHint($this->types[$type->name], $type);
                                 $parameter->setType($typeReference);
                             } elseif ($type instanceof InputObjectType) {
-                                // TODO create value objects to allow typing inputs strictly
                                 $typeReference = $this->makeInput($type);
                                 $this->ensureUse($this->operationStack->operation, $typeReference);
                                 $parameter->setType($typeReference);
@@ -260,10 +290,10 @@ class ClassGenerator
                             }
 
                             $typeParts = explode('\\', $typeReference);
-                            $typeDoc = PhpType::phpDoc($type, array_pop($typeParts));
-                            $execute = $this->operationStack->operation->getMethod('execute');
-                            $comment = $execute->getComment();
-                            $comment .= "@parameter {$typeDoc} \${$parameter->getName()}\n";
+                            $typeDoc   = PhpType::phpDoc($type, array_pop($typeParts));
+                            $execute   = $this->operationStack->operation->getMethod('execute');
+                            $comment   = $execute->getComment();
+                            $comment   .= "@parameter {$typeDoc} \${$parameter->getName()}\n";
                             $execute->setComment($comment);
 
                             $this->operationStack->addParameterToOperation($parameter);
@@ -276,6 +306,10 @@ class ClassGenerator
                                 ? $field->alias->value
                                 : $field->name->value;
 
+                            if ($fieldName === '__typename') {
+                                return;
+                            }
+
                             $selection = $this->operationStack->peekSelection();
 
                             /** @var Type & OutputType $type */
@@ -283,7 +317,19 @@ class ClassGenerator
                             /** @var Type $namedType */
                             $namedType = Type::getNamedType($type);
 
-                            if ($namedType instanceof ObjectType) {
+                            /** @var ObjectType|InterfaceType|UnionType $parent */
+                            $parent    = $typeInfo->getParentType();
+                            $namedType = Type::getNamedType($type);
+                            if ($namedType instanceof InterfaceType) {
+                                foreach ($parent->getInterfaces() as $interface) {
+                                    if ($interface->hasField($field->name->value)) {
+                                        $selection->addImplement($interface->name);
+                                        // return;
+                                    }
+                                }
+                            }
+
+                            /*if () {
                                 $typedObjectName = ucfirst($fieldName);
 
                                 // We go one level deeper into the selection set
@@ -291,8 +337,9 @@ class ClassGenerator
                                 $this->namespaceStack [] = $typedObjectName;
                                 $typeReference           = "\\{$this->withCurrentNamespace($typedObjectName)}";
 
+                                $selectionClass = $this->makeTypedObject($typedObjectName, true);
                                 $this->operationStack->pushSelection(
-                                    $this->makeTypedObject($typedObjectName)
+                                    $selectionClass
                                 );
                                 $this->ensureUse($selection, TypedObject::class);
                                 $this->ensureUse($selection, $typeReference);
@@ -302,6 +349,60 @@ class ClassGenerator
                                     return {$typedObjectName}::fromStdClass(\$value);
                                 }
                                 PHP;
+                            } else*/
+                            if ($namedType instanceof ObjectType || $namedType instanceof InterfaceType) {
+                                $typedObjectName = ucfirst($fieldName);
+
+                                // We go one level deeper into the selection set
+                                // To avoid naming conflicts, we add on another namespace
+                                $this->namespaceStack [] = $typedObjectName;
+                                $typeReference           = "\\{$this->withCurrentNamespace($typedObjectName)}";
+
+                                $selectionClass = $this->makeTypedObject($typedObjectName);
+                                $this->operationStack->pushSelection(
+                                    $selectionClass
+                                );
+                                $this->ensureUse($selection, TypedObject::class);
+                                $this->ensureUse($selection, $typeReference);
+                                $this->ensureUse($selection, stdClass::class);
+                                $typeMapper = <<<PHP
+                                static function (stdClass \$value): TypedObject {
+                                    return {$typedObjectName}::fromStdClass(\$value);
+                                }
+                                PHP;
+
+                                if ($namedType instanceof InterfaceType) {
+                                    $this->ensureUse($selection, RuntimeException::class);
+
+                                    $interfacedTypeMapper = <<<PHP
+                                    static function (stdClass \$value): TypedObject {
+                                        switch (\$value->__typename) {
+                                    PHP;
+                                    $subTypes             = [];
+                                    foreach ($field->selectionSet->selections as $subSelection) {
+                                        if ($subSelection instanceof InlineFragmentNode) {
+                                            $subTypes [] = $subSelection->typeCondition->name->value;
+                                            $this->ensureUse($selection, $this->currentNamespace() . '\\' . $subSelection->typeCondition->name->value);
+                                            $interfacedTypeMapper .= <<<PHP
+
+                                                case '{$subSelection->typeCondition->name->value}':
+                                                    return {$subSelection->typeCondition->name->value}::fromStdClass(\$value);
+                                        PHP;
+                                        }
+                                    }
+                                    $subTypes             = implode(', ', $subTypes);
+                                    $interfacedTypeMapper .= <<<PHP
+
+                                            default:
+                                                throw new RuntimeException('Found unknown subtype, expected {$subTypes} got ' . \$value->__typename);
+                                        }
+                                    }
+                                    PHP;
+
+                                    if (! empty($subTypes)) {
+                                        $typeMapper = $interfacedTypeMapper;
+                                    }
+                                }
                             } elseif ($namedType instanceof ScalarType) {
                                 $typeReference = PhpType::forScalar($namedType);
                                 $this->ensureUse($selection, DirectMapper::class);
@@ -320,7 +421,8 @@ class ClassGenerator
                             }
 
                             $fieldProperty = $selection->addProperty($fieldName);
-                            $typeParts     = explode('\\', $typeReference);
+                            $fieldProperty->setProtected();
+                            $typeParts = explode('\\', $typeReference);
                             if ($type instanceof ListOfType || ($type instanceof NonNull && $type->getWrappedType() instanceof ListOfType)) {
                                 $fieldProperty->setComment('@var ' . PhpType::phpDoc($type, array_pop($typeParts)));
                                 $fieldProperty->setType('array');
@@ -336,7 +438,38 @@ class ClassGenerator
                             return {$typeMapper};
                             PHP
                             );
+
+                            $this->createAccessor($selection, $fieldName, $fieldProperty);
                         },
+                    ],
+                    NodeKind::FRAGMENT_SPREAD      => [
+                        'enter' => function (FragmentSpreadNode $fragmentSpread) use ($definitions): void {
+                            $fragmentName = $fragmentSpread->name->value;
+                            /** @var FragmentDefinitionNode $fragmentDefinition */
+                            $fragmentDefinition = $definitions[$fragmentName];
+
+                            dd($fragmentDefinition);
+                            // TODO handle the new selection set
+                        },
+                    ],
+                    NodeKind::INLINE_FRAGMENT      => [
+                        'enter' => function (InlineFragmentNode $fragmentSpread) use ($definitions, $typeInfo): void {
+                            /** @var Type $type */
+                            $type                   = $typeInfo->getType();
+                            $typedObjectName        = ucfirst($type->name);
+                            $this->namespaceStack[] = null;//$typedObjectName;
+
+                            $selectionClass = new ClassType($typedObjectName, $this->makeNamespace());
+                            $parent         = $this->operationStack->peekSelection();
+                            $name           = $parent->getNamespace()->getName() . '\\' . $parent->getName();
+                            $selectionClass->addExtend($name);
+                            $this->operationStack->pushSelection(
+                                $selectionClass
+                            );
+                        },/*
+                        'leave' => function(){
+                            $this->operationStack->popSelection();
+                        }*/
                     ],
                     NodeKind::SELECTION_SET        => [
                         'leave' => function (SelectionSetNode $_): void {
@@ -352,17 +485,21 @@ class ClassGenerator
             )
         );
 
-        return $this->types + $this->classes;
+        return array_merge($this->types, $this->classes);
     }
 
-    protected function makeTypedObject(string $name): ClassType
+    protected function makeTypedObject(string $name, bool $asInterface = false): ClassType
     {
         $typedObject = new ClassType(
             $name,
             $this->makeNamespace()
         );
-        $this->ensureUse($typedObject, TypedObject::class);
-        $typedObject->addExtend(TypedObject::class);
+        if ($asInterface) {
+            $typedObject->setInterface();
+        } else {
+            $this->ensureUse($typedObject, TypedObject::class);
+            $typedObject->addExtend(TypedObject::class);
+        }
 
         return $typedObject;
     }
@@ -381,7 +518,7 @@ class ClassGenerator
 
     protected function currentNamespace(): string
     {
-        return implode('\\', $this->namespaceStack);
+        return implode('\\', array_filter($this->namespaceStack));
     }
 
     protected function defineTypeClasses(): void
@@ -397,9 +534,9 @@ class ClassGenerator
     {
         $enumClass = new ClassType(
             $type->name,
-            new PhpNamespace($this->endpointConfig->namespace().'\\'.'Types')
+            new PhpNamespace($this->endpointConfig->namespace() . '\\' . 'Types')
         );
-        $adapter = $this->endpointConfig->enumAdapter();
+        $adapter   = $this->endpointConfig->enumAdapter();
 
         return $adapter->define($enumClass, $type->astNode);
     }
@@ -465,26 +602,63 @@ class ClassGenerator
                 throw new Exception('Unsupported type: ' . get_class($fieldType));
             }
 
-            $inputObject->addMethod('get' . ucfirst($field->name))
-                        ->setReturnType($typeReference ?? $property->getType())
-                        ->setReturnNullable($property->isNullable())
-                        ->setBody(<<<PHP
-                            return \$this->{$field->name};
-                        PHP
-                        );
+            $this->createAccessor($inputObject, $field->name, $property);
+            $this->createSetter($inputObject, $field->name, $property);
+        }
 
-            $method = $inputObject->addMethod('set' . ucfirst($field->name))->setReturnType($inputReference);
-            $method->addParameter($field->name)->setType($typeReference ?? $property->getType())->setNullable($property->isNullable());
-            $method->setBody(<<<PHP
-                \$this->{$field->name} = \${$field->name};
+        $this->types[$inputName] = $inputObject;
+
+        return $inputReference;
+    }
+
+    /**
+     * @param ClassType $classType
+     * @param string    $fieldName
+     * @param Property  $property
+     */
+    protected function createSetter(ClassType $classType, string $fieldName, Property $property): void
+    {
+        $setter = $classType->addMethod('set' . ucfirst($fieldName))->setReturnType($classType->getNamespace()->getName() . '\\' . $classType->getName());
+        $setter->addParameter($fieldName)->setType($property->getType())->setNullable($property->isNullable());
+
+        if (! $classType->isInterface()) {
+            $setter->setBody(<<<PHP
+                \$this->{$fieldName} = \${$fieldName};
 
             return \$this;
             PHP
             );
         }
 
-        $this->types[$inputName] = $inputObject;
+        if ($property->getComment()) {
+            $typeDoc = str_replace('@var ', '', $property->getComment());
 
-        return $inputReference;
+            $setter->setComment("@param {$typeDoc} \${$fieldName}\n\n@return {$classType->getName()}");
+        }
+    }
+
+    /**
+     * @param ClassType $classType
+     * @param string    $fieldName
+     * @param Property  $property
+     */
+    protected function createAccessor(ClassType $classType, string $fieldName, Property $property): void
+    {
+        $accessor = $classType
+            ->addMethod(($property->getType() === 'bool' ? 'is' : 'get') . ucfirst($fieldName))
+            ->setReturnType($property->getType())
+            ->setReturnNullable($property->isNullable());
+        if (! $classType->isInterface()) {
+            $accessor->setBody(<<<PHP
+                return \$this->{$fieldName};
+            PHP
+            );
+        }
+
+        if ($property->getComment()) {
+            $typeDoc = str_replace('@var ', '', $property->getComment());
+
+            $accessor->setComment("@return {$typeDoc}");
+        }
     }
 }

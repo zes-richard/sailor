@@ -5,13 +5,12 @@ query MyObjectArrayQuery($array1: [Int!]!, $array2: [SomeEnum]!, $array3: [Int!]
         array3 {
             value
         }
-        array4
-#        {
-#            value
-#            ... on SomeObject {
-#                array1
-#            }
-#        }
+        array4 {
+            value
+            ... on SomeObject {
+                array1
+            }
+        }
     }
 }
 

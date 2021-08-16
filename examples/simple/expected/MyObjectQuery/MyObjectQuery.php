@@ -10,12 +10,17 @@ use stdClass;
 
 class MyObjectQuery extends TypedObject
 {
-    public ?SingleObject $singleObject;
+    protected ?SingleObject $singleObject;
 
     public function singleObjectTypeMapper(): callable
     {
         return static function (stdClass $value): TypedObject {
             return SingleObject::fromStdClass($value);
         };
+    }
+
+    public function getSingleObject(): ?SingleObject
+    {
+        return $this->singleObject;
     }
 }

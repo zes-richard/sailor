@@ -33,7 +33,13 @@ class MyObjectArrayQuery extends Operation
             array3 {
               value
             }
-            array4
+            array4 {
+              value
+              ... on SomeObject {
+                array1
+              }
+              __typename
+            }
           }
         }';
     }

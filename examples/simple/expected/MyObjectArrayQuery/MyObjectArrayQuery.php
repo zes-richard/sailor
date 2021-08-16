@@ -10,12 +10,17 @@ use stdClass;
 
 class MyObjectArrayQuery extends TypedObject
 {
-    public ?SingleObjectArrayArgs $singleObjectArrayArgs;
+    protected ?SingleObjectArrayArgs $singleObjectArrayArgs;
 
     public function singleObjectArrayArgsTypeMapper(): callable
     {
         return static function (stdClass $value): TypedObject {
             return SingleObjectArrayArgs::fromStdClass($value);
         };
+    }
+
+    public function getSingleObjectArrayArgs(): ?SingleObjectArrayArgs
+    {
+        return $this->singleObjectArrayArgs;
     }
 }

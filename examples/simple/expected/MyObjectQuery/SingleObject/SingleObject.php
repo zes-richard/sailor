@@ -9,10 +9,15 @@ use Spawnia\Sailor\TypedObject;
 
 class SingleObject extends TypedObject
 {
-    public ?int $value;
+    protected ?int $value;
 
     public function valueTypeMapper(): callable
     {
         return new DirectMapper();
+    }
+
+    public function getValue(): ?int
+    {
+        return $this->value;
     }
 }

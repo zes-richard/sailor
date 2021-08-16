@@ -10,12 +10,17 @@ use stdClass;
 
 class SingleObject extends TypedObject
 {
-    public ?Nested $nested;
+    protected ?Nested $nested;
 
     public function nestedTypeMapper(): callable
     {
         return static function (stdClass $value): TypedObject {
             return Nested::fromStdClass($value);
         };
+    }
+
+    public function getNested(): ?Nested
+    {
+        return $this->nested;
     }
 }

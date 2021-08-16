@@ -9,10 +9,15 @@ use Spawnia\Sailor\TypedObject;
 
 class TwoArgs extends TypedObject
 {
-    public ?string $twoArgs;
+    protected ?string $twoArgs;
 
     public function twoArgsTypeMapper(): callable
     {
         return new DirectMapper();
+    }
+
+    public function getTwoArgs(): ?string
+    {
+        return $this->twoArgs;
     }
 }

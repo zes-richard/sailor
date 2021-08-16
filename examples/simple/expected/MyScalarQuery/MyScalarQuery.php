@@ -9,10 +9,15 @@ use Spawnia\Sailor\TypedObject;
 
 class MyScalarQuery extends TypedObject
 {
-    public ?string $scalarWithArg;
+    protected ?string $scalarWithArg;
 
     public function scalarWithArgTypeMapper(): callable
     {
         return new DirectMapper();
+    }
+
+    public function getScalarWithArg(): ?string
+    {
+        return $this->scalarWithArg;
     }
 }
