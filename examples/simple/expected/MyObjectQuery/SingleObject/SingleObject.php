@@ -9,8 +9,7 @@ use Spawnia\Sailor\TypedObject;
 
 class SingleObject extends TypedObject
 {
-    /** @var int|null */
-    public $value;
+    public ?int $value;
 
     public function valueTypeMapper(): callable
     {

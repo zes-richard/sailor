@@ -10,8 +10,7 @@ use stdClass;
 
 class MyObjectQuery extends TypedObject
 {
-    /** @var SingleObject|null */
-    public $singleObject;
+    public ?SingleObject $singleObject;
 
     public function singleObjectTypeMapper(): callable
     {

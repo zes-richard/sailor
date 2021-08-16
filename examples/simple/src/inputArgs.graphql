@@ -1,0 +1,3 @@
+query InputArgs($first: InputArg!, $secondString: String!, $date: DateTime!) {
+    inputArgs(first: $first, second: {string: $secondString, created: $date})
+}

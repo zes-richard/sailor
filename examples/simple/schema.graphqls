@@ -1,18 +1,41 @@
 type Query {
     scalarWithArg(arg: String): ID
     twoArgs(first: String, second: Int): ID
+    inputArgs(first: InputArg!, second: SplitArg!): ID
     singleObject: SomeObject
+    singleObjectArrayArgs(array1: [Int!]!, array2: [SomeEnum]!, array3: [Int!], array4: [InputArg]): SomeObject
 }
 
-type SomeObject {
+type SomeObject implements SomeInterface {
     value: Int
     nested: SomeObject
     enum: SomeEnum
+    array1: [Int!]!
+    array2: [SomeEnum]!
+    array3: [SomeObject!]
+    array4: [SomeInterface]
 }
+
+input InputArg {
+    integer: Int!
+    someID: ID!
+    nested: SplitArg
+}
+
+input SplitArg {
+    string: String!
+    created: DateTime!
+}
+
+scalar DateTime
 
 enum SomeEnum {
     FOO
 
     "Description for bar"
     BAR
+}
+
+interface SomeInterface {
+    value: Int
 }

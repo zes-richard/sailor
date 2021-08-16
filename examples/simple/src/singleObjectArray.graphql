@@ -1,0 +1,17 @@
+query MyObjectArrayQuery($array1: [Int!]!, $array2: [SomeEnum]!, $array3: [Int!], $array4: [InputArg]) {
+    singleObjectArrayArgs(array1: $array1, array2: $array2, array3: $array3, array4: $array4) {
+        array1
+        array2
+        array3 {
+            value
+        }
+        array4 {
+            value
+            ... on SomeObject {
+                array1
+            }
+        }
+    }
+}
+
+

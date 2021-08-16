@@ -25,8 +25,9 @@ class ClassGeneratorTest extends TestCase
             simple
         }
         ');
-        $operationsSets = $generator->generate($document);
+        [$operationsSets, $inputClasses] = $generator->generate($document);
         self::assertCount(1, $operationsSets);
+        self::assertCount(0, $inputClasses);
 
         $fooOperation = $operationsSets[0];
         self::assertCount(1, $fooOperation->selectionStorage);
@@ -51,8 +52,9 @@ class ClassGeneratorTest extends TestCase
             }
         }
         ');
-        $operationsSets = $generator->generate($document);
+        [$operationsSets, $inputClasses] = $generator->generate($document);
         self::assertCount(1, $operationsSets);
+        self::assertCount(0, $inputClasses);
 
         $fooOperation = $operationsSets[0];
         $selections = $fooOperation->selectionStorage;
@@ -76,8 +78,9 @@ class ClassGeneratorTest extends TestCase
             simple
         }
         ');
-        $operationsSets = $generator->generate($document);
+        [$operationsSets, $inputClasses] = $generator->generate($document);
         self::assertCount(1, $operationsSets);
+        self::assertCount(0, $inputClasses);
 
         $fooOperation = $operationsSets[0];
         $selections = $fooOperation->selectionStorage;

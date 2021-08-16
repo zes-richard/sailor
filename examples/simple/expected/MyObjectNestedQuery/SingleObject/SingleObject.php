@@ -10,8 +10,7 @@ use stdClass;
 
 class SingleObject extends TypedObject
 {
-    /** @var Nested|null */
-    public $nested;
+    public ?Nested $nested;
 
     public function nestedTypeMapper(): callable
     {

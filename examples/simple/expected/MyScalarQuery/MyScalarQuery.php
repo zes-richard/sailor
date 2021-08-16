@@ -9,8 +9,7 @@ use Spawnia\Sailor\TypedObject;
 
 class MyScalarQuery extends TypedObject
 {
-    /** @var string|null */
-    public $scalarWithArg;
+    public ?string $scalarWithArg;
 
     public function scalarWithArgTypeMapper(): callable
     {

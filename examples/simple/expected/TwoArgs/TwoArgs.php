@@ -9,8 +9,7 @@ use Spawnia\Sailor\TypedObject;
 
 class TwoArgs extends TypedObject
 {
-    /** @var string|null */
-    public $twoArgs;
+    public ?string $twoArgs;
 
     public function twoArgsTypeMapper(): callable
     {
