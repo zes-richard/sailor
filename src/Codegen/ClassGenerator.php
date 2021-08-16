@@ -54,11 +54,6 @@ class ClassGenerator
     /**
      * @var array<string, ClassType>
      */
-    protected array $inputClasses = [];
-
-    /**
-     * @var array<string, ClassType>
-     */
     protected array $types = [];
 
     /**
@@ -392,7 +387,7 @@ class ClassGenerator
     protected function defineTypeClasses(): void
     {
         foreach ($this->schema->getTypeMap() as $type) {
-            if ($type instanceof EnumType) {
+            if ($type instanceof EnumType && $type->astNode) {
                 $this->types[$type->name] = $this->defineEnumTypeClass($type);
             }
         }
@@ -406,7 +401,7 @@ class ClassGenerator
         );
         $adapter = $this->endpointConfig->enumAdapter();
 
-        return $adapter->define($enumClass, $type);
+        return $adapter->define($enumClass, $type->astNode);
     }
 
     /**
@@ -426,7 +421,7 @@ class ClassGenerator
         $inputNamespace = $this->endpointConfig->namespace() . '\\Input';
         $inputReference = $inputNamespace . '\\' . $inputName;
 
-        if (isset($this->inputClasses[$inputName])) {
+        if (isset($this->types[$inputName])) {
             return $inputReference;
         }
 
@@ -488,7 +483,7 @@ class ClassGenerator
             );
         }
 
-        $this->inputClasses[$inputName] = $inputObject;
+        $this->types[$inputName] = $inputObject;
 
         return $inputReference;
     }

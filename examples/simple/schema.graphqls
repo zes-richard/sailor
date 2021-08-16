@@ -6,14 +6,14 @@ type Query {
     singleObjectArrayArgs(array1: [Int!]!, array2: [SomeEnum]!, array3: [Int!], array4: [InputArg]): SomeObject
 }
 
-type SomeObject implements SomeInterface {
+type SomeObject  {
     value: Int
     nested: SomeObject
     enum: SomeEnum
     array1: [Int!]!
     array2: [SomeEnum]!
     array3: [SomeObject!]
-    array4: [SomeInterface]
+    array4: [Int]
 }
 
 input InputArg {
@@ -35,7 +35,7 @@ enum SomeEnum {
     "Description for bar"
     BAR
 }
-
-interface SomeInterface {
-    value: Int
-}
+#
+#interface SomeInterface {
+#    value: Int
+#}

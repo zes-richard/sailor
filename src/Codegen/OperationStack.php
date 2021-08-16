@@ -66,10 +66,10 @@ class OperationStack
 
     public function classes(): array
     {
-        return [
+        return array_merge([
             $this->operation,
             $this->result,
             $this->errorFreeResult,
-        ] + $this->selectionStorage;
+        ], $this->selectionStorage);
     }
 }

@@ -25,12 +25,11 @@ class ClassGeneratorTest extends TestCase
             simple
         }
         ');
-        [$operationsSets, $inputClasses] = $generator->generate($document);
-        self::assertCount(1, $operationsSets);
-        self::assertCount(0, $inputClasses);
+        $classes = $generator->generate($document);
+        self::assertCount(4, $classes);
 
-        $fooOperation = $operationsSets[0];
-        self::assertCount(1, $fooOperation->selectionStorage);
+        // $fooOperation = $classes[0];
+        // self::assertCount(1, $fooOperation->selectionStorage);
     }
 
     public function testGenerateNested(): void
@@ -52,13 +51,12 @@ class ClassGeneratorTest extends TestCase
             }
         }
         ');
-        [$operationsSets, $inputClasses] = $generator->generate($document);
-        self::assertCount(1, $operationsSets);
-        self::assertCount(0, $inputClasses);
+        $classes = $generator->generate($document);
+        self::assertCount(5, $classes);
 
-        $fooOperation = $operationsSets[0];
-        $selections = $fooOperation->selectionStorage;
-        self::assertCount(2, $selections);
+        // $fooOperation = $operationsSets[0];
+        // $selections = $fooOperation->selectionStorage;
+        // self::assertCount(2, $selections);
     }
 
     public function testGenerateEnum(): void
@@ -78,13 +76,12 @@ class ClassGeneratorTest extends TestCase
             simple
         }
         ');
-        [$operationsSets, $inputClasses] = $generator->generate($document);
-        self::assertCount(1, $operationsSets);
-        self::assertCount(0, $inputClasses);
+        $classes = $generator->generate($document);
+        self::assertCount(5, $classes);
 
-        $fooOperation = $operationsSets[0];
-        $selections = $fooOperation->selectionStorage;
-        self::assertCount(1, $selections);
+        // $fooOperation = $operationsSets[0];
+        // $selections = $fooOperation->selectionStorage;
+        // self::assertCount(1, $selections);
     }
 
     protected function createTestGenerator(string $schema): ClassGenerator
