@@ -28,7 +28,7 @@ abstract class TypedObject
                 $thisFunctionItself = __FUNCTION__;
                 $availableMethods = array_filter(
                     get_class_methods(static::class),
-                    static fn (string $method): bool => $method !== $thisFunctionItself,
+                    static fn (string $method): bool => $method !== $thisFunctionItself && !str_starts_with($method, 'get'),
                 );
                 if (! in_array($methodName, $availableMethods)) {
                     $availableFields = implode(

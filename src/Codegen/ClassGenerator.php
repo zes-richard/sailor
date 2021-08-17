@@ -372,8 +372,6 @@ class ClassGenerator
                                 PHP;
 
                                 if ($namedType instanceof InterfaceType) {
-                                    $this->ensureUse($selection, RuntimeException::class);
-
                                     $interfacedTypeMapper = <<<PHP
                                     static function (stdClass \$value): TypedObject {
                                         switch (\$value->__typename) {
@@ -394,7 +392,7 @@ class ClassGenerator
                                     $interfacedTypeMapper .= <<<PHP
 
                                             default:
-                                                throw new RuntimeException('Found unknown subtype, expected {$subTypes} got ' . \$value->__typename);
+                                                return {$typedObjectName}::fromStdClass(\$value);
                                         }
                                     }
                                     PHP;

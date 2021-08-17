@@ -70,7 +70,7 @@ class SimpleTest extends TestCase
         Configuration::setEndpoint('simple', $endpoint);
 
         $result = MyScalarQuery::execute();
-        self::assertSame($value, $result->data->scalarWithArg);
+        self::assertSame($value, $result->data->getScalarWithArg());
     }
 
     public function testRequestWithVariable(): void
@@ -113,7 +113,7 @@ class SimpleTest extends TestCase
                 ],
             ]));
 
-        self::assertSame($bar, MyScalarQuery::execute()->data->scalarWithArg);
+        self::assertSame($bar, MyScalarQuery::execute()->data->getScalarWithArg());
     }
 
     public function testMockError(): void
@@ -157,12 +157,12 @@ class SimpleTest extends TestCase
             ]));
 
         $result = MyObjectNestedQuery::execute();
-        $object = $result->data->singleObject;
+        $object = $result->data->getSingleObject();
         self::assertNotNull($object);
 
-        $nested = $object->nested;
+        $nested = $object->getNested();
         self::assertNotNull($nested);
-        self::assertSame($value, $nested->value);
+        self::assertSame($value, $nested->getValue());
     }
 
     public function testNestedObjectNull(): void
@@ -180,8 +180,8 @@ class SimpleTest extends TestCase
             ]));
 
         $result = MyObjectNestedQuery::execute();
-        $object = $result->data->singleObject;
+        $object = $result->data->getSingleObject();
         self::assertNotNull($object);
-        self::assertNull($object->nested);
+        self::assertNull($object->getNested());
     }
 }

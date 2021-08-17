@@ -16,7 +16,7 @@ class TypedObjectTest extends TestCase
             'scalarWithArg' => 'bar',
         ]);
 
-        self::assertSame('bar', $foo->scalarWithArg);
+        self::assertSame('bar', $foo->getScalarWithArg());
     }
 
     public function testWrongKey(): void

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Spawnia\Sailor\Simple\MyObjectArrayQuery\SingleObjectArrayArgs;
 
-use RuntimeException;
 use Spawnia\Sailor\Mapper\DirectMapper;
 use Spawnia\Sailor\Simple\MyObjectArrayQuery\SingleObjectArrayArgs\Array3\Array3;
 use Spawnia\Sailor\Simple\MyObjectArrayQuery\SingleObjectArrayArgs\Array4\Array4;
@@ -74,7 +73,7 @@ class SingleObjectArrayArgs extends TypedObject
                 case 'SomeObject':
                     return SomeObject::fromStdClass($value);
                 default:
-                    throw new RuntimeException('Found unknown subtype, expected SomeObject got ' . $value->__typename);
+                    return Array4::fromStdClass($value);
             }
         };
     }
