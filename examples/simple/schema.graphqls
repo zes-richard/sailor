@@ -16,6 +16,11 @@ type SomeObject implements SomeInterface {
     array4: [SomeInterface]
 }
 
+type OtherObject implements SomeInterface {
+    value: Int
+    valueTwo: String
+}
+
 input InputArg {
     integer: Int!
     someID: ID!

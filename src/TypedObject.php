@@ -18,6 +18,10 @@ abstract class TypedObject
         $instance = new static;
 
         foreach ($data as $field => $valueOrValues) {
+            if ($field === '__typename') {
+                continue;
+            }
+
             if (is_null($valueOrValues)) {
                 $converted = null;
             } else {

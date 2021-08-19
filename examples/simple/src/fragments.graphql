@@ -1,0 +1,17 @@
+query Fragments {
+    singleObject {
+        ...Test
+    }
+}
+
+fragment Test on SomeObject {
+    value
+    array3 {
+        value
+        ...Test2
+    }
+}
+
+fragment Test2 on SomeObject {
+    enum
+}

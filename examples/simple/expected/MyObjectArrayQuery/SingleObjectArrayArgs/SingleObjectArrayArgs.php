@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Spawnia\Sailor\Simple\MyObjectArrayQuery\SingleObjectArrayArgs;
 
+use Spawnia\Sailor\Configuration;
 use Spawnia\Sailor\Mapper\DirectMapper;
 use Spawnia\Sailor\Simple\MyObjectArrayQuery\SingleObjectArrayArgs\Array3\Array3;
 use Spawnia\Sailor\Simple\MyObjectArrayQuery\SingleObjectArrayArgs\Array4\Array4;
@@ -40,7 +41,9 @@ class SingleObjectArrayArgs extends TypedObject
 
     public function array2TypeMapper(): callable
     {
-        return new DirectMapper();
+        return static function ($value) {
+            return Configuration::endpoint('simple')->enumAdapter()->parse($value, 'Spawnia\Sailor\Simple\Types\SomeEnum');
+        };
     }
 
     /**

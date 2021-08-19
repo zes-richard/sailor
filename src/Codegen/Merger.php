@@ -22,10 +22,7 @@ class Merger
         foreach ($documents as $document) {
             /** @var OperationDefinitionNode|FragmentDefinitionNode $definition */
             foreach ($document->definitions as $definition) {
-                /** @var string $name We validated that operations are always named */
-                $name = $definition->name->value;
-
-                $definitions[$name] = $definition;
+                $definitions[] = $definition;
             }
         }
 

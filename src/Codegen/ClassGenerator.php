@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Spawnia\Sailor\Codegen;
 
+use Closure;
 use Exception;
 use GraphQL\Language\AST\DocumentNode;
+use GraphQL\Language\AST\EnumTypeDefinitionNode;
 use GraphQL\Language\AST\FieldNode;
 use GraphQL\Language\AST\FragmentDefinitionNode;
 use GraphQL\Language\AST\FragmentSpreadNode;
@@ -15,11 +17,12 @@ use GraphQL\Language\AST\Node;
 use GraphQL\Language\AST\NodeKind;
 use GraphQL\Language\AST\NodeList;
 use GraphQL\Language\AST\OperationDefinitionNode;
+use GraphQL\Language\AST\ScalarTypeDefinitionNode;
 use GraphQL\Language\AST\SelectionSetNode;
 use GraphQL\Language\AST\VariableDefinitionNode;
 use GraphQL\Language\Printer;
-use GraphQL\Language\Token;
 use GraphQL\Language\Visitor;
+use GraphQL\Language\VisitorOperation;
 use GraphQL\Type\Definition\CustomScalarType;
 use GraphQL\Type\Definition\EnumType;
 use GraphQL\Type\Definition\InputObjectType;
@@ -31,7 +34,6 @@ use GraphQL\Type\Definition\ObjectType;
 use GraphQL\Type\Definition\OutputType;
 use GraphQL\Type\Definition\ScalarType;
 use GraphQL\Type\Definition\Type;
-use GraphQL\Type\Definition\UnionType;
 use GraphQL\Type\Schema;
 use GraphQL\Utils\TypeInfo;
 use JsonSerializable;
@@ -40,7 +42,7 @@ use Nette\PhpGenerator\Helpers;
 use Nette\PhpGenerator\Parameter;
 use Nette\PhpGenerator\PhpNamespace;
 use Nette\PhpGenerator\Property;
-use RuntimeException;
+use Spawnia\Sailor\Configuration;
 use Spawnia\Sailor\EndpointConfig;
 use Spawnia\Sailor\ErrorFreeResult;
 use Spawnia\Sailor\InputSerializer;
@@ -71,9 +73,12 @@ class ClassGenerator
     protected array $classes = [];
 
     /**
-     * @var array<int, string>
+     * @var array<int, string|null>
      */
     protected array $namespaceStack = [];
+
+    /** @var NodeList<OperationDefinitionNode|FragmentDefinitionNode|ScalarTypeDefinitionNode|EnumTypeDefinitionNode> $definitions */
+    private NodeList $definitions;
 
     public function __construct(Schema $schema, EndpointConfig $endpointConfig, string $endpoint)
     {
@@ -90,400 +95,419 @@ class ClassGenerator
     {
         $this->defineTypeClasses();
 
-        $typeInfo    = new TypeInfo($this->schema);
-        $definitions = $document->definitions;
+        $typeInfo          = new TypeInfo($this->schema);
+        $this->definitions = $document->definitions;
 
-        Visitor::visit(
-            $document,
-            Visitor::visitWithTypeInfo(
-                $typeInfo,
-                [
-                    // A named operation, e.g. "mutation FooMutation", maps to a class
-                    NodeKind::OPERATION_DEFINITION => [
-                        'enter' => function (OperationDefinitionNode $operationDefinition): void {
-                            $operationName = $operationDefinition->name->value;
+        Visitor::visit($document, Visitor::visitWithTypeInfo($typeInfo, $this->makeVisitor($typeInfo)));
 
-                            // Generate a class to represent the query/mutation itself
-                            $operation = new ClassType($operationName, $this->makeNamespace());
+        return array_merge(array_values($this->types), $this->classes);
+    }
 
-                            // The base class contains most of the logic
-                            $this->ensureUse($operation, Operation::class);
-                            $operation->setExtends(Operation::class);
+    /**
+     * @return Closure
+     */
+    protected function onEnterOperationDefinition(): Closure
+    {
+        return function (OperationDefinitionNode $operationDefinition): void {
+            $operationName = $operationDefinition->name->value;
 
-                            // The execute method is the public API of the operation
-                            $execute = $operation->addMethod('execute');
-                            $execute->setStatic();
+            // Generate a class to represent the query/mutation itself
+            $operation = new ClassType($operationName, $this->makeNamespace());
 
-                            // It returns a typed result which is a new selection set class
-                            $resultName = "{$operationName}Result";
+            // The base class contains most of the logic
+            $this->ensureUse($operation, Operation::class);
+            $operation->setExtends(Operation::class);
 
-                            // Related classes are put into a nested namespace
-                            $this->namespaceStack [] = $operationName;
-                            $resultClass             = $this->withCurrentNamespace($resultName);
+            // The execute method is the public API of the operation
+            $execute = $operation->addMethod('execute');
+            $execute->setStatic();
 
-                            $execute->setReturnType($resultClass);
-                            $execute->setBody(<<<'PHP'
-                            return self::executeOperation(...func_get_args());
-                            PHP
-                            );
+            // It returns a typed result which is a new selection set class
+            $resultName = "{$operationName}Result";
 
-                            // Store the actual query string in the operation
-                            // TODO minify the query string
-                            $document = $operation->addMethod('document');
-                            $document->setStatic();
-                            $document->setReturnType('string');
-                            $clone = (clone $operationDefinition)->cloneDeep();
-                            Visitor::visit($clone, [
-                                NodeKind::SELECTION_SET => ['enter' => function (SelectionSetNode $node) {
-                                    foreach ($node->selections as $selection) {
-                                        if ($selection instanceof InlineFragmentNode) {
-                                            $fieldNode        = new FieldNode([
-                                                'name'         => new NameNode([
-                                                    'value' => '__typename',
-                                                    'loc'   => null,
-                                                ]),
-                                                'arguments'    => new NodeList([]),
-                                                'directives'   => new NodeList([]),
-                                                'selectionSet' => null,
-                                                'loc'          => null,
-                                            ]);
-                                            $node->selections = $node->selections->merge([$fieldNode]);
-                                            break;
-                                        }
-                                    }
-                                }],
-                            ]);
-                            $operationString = Printer::doPrint($clone);
-                            $document->setBody(<<<PHP
-                            return /* @lang GraphQL */ '{$operationString}';
-                            PHP
-                            );
+            // Related classes are put into a nested namespace
+            $this->namespaceStack [] = $operationName;
+            $resultClass             = $this->withCurrentNamespace($resultName);
 
-                            // Set the endpoint this operation belongs to
-                            $document = $operation->addMethod('endpoint');
-                            $document->setStatic();
-                            $document->setReturnType('string');
-                            $document->setBody(<<<PHP
-                            return '{$this->endpoint}';
-                            PHP
-                            );
+            $execute->setReturnType($resultClass);
+            $execute->setBody(<<<'PHP'
+            return self::executeOperation(...func_get_args());
+            PHP
+            );
 
-                            $result = new ClassType($resultName, $this->makeNamespace());
-                            $this->ensureUse($result, Result::class);
-                            $result->setExtends(Result::class);
+            // Store the actual query string in the operation
+            // TODO minify the query string
+            $document = $operation->addMethod('document');
+            $document->setStatic();
+            $document->setReturnType('string');
+            $clone    = (clone $operationDefinition)->cloneDeep();
+            $nodeList = new NodeList([$clone]);
+            Visitor::visit($clone, [
+                NodeKind::SELECTION_SET => [
+                    'enter' => $this->onEnterSelectionSet($nodeList),
+                ],
+            ]);
 
-                            $setData = $result->addMethod('setData');
-                            $setData->setVisibility('protected');
-                            $dataParam = $setData->addParameter('data');
-                            $this->ensureUse($result, stdClass::class);
-                            $dataParam->setType(stdClass::class);
-                            $setData->setReturnType('void');
-                            $setData->setBody(<<<PHP
-                            \$this->data = {$operationName}::fromStdClass(\$data);
-                            PHP
-                            );
+            $operationString = rtrim(Printer::doPrint(new DocumentNode(['definitions' => $nodeList])));
 
-                            $dataProp = $result->addProperty('data');
-                            $dataProp->setType(
-                                $this->withCurrentNamespace($operationName)
-                            );
-                            $dataProp->setNullable(true);
+            $document->setBody(<<<PHP
+            return /* @lang GraphQL */ '{$operationString}';
+            PHP
+            );
 
-                            $errorFreeResultName = "{$operationName}ErrorFreeResult";
+            // Set the endpoint this operation belongs to
+            $document = $operation->addMethod('endpoint');
+            $document->setStatic();
+            $document->setReturnType('string');
+            $document->setBody(<<<PHP
+            return '{$this->endpoint}';
+            PHP
+            );
 
-                            $errorFree = $result->addMethod('errorFree');
-                            $errorFree->setVisibility('public');
-                            $errorFree->setReturnType(
-                                $this->withCurrentNamespace($errorFreeResultName)
-                            );
-                            $errorFree->setBody(<<<PHP
-                            return {$errorFreeResultName}::fromResult(\$this);
-                            PHP
-                            );
+            $result = new ClassType($resultName, $this->makeNamespace());
+            $this->ensureUse($result, Result::class);
+            $result->setExtends(Result::class);
 
-                            $errorFreeResult = new ClassType($errorFreeResultName, $this->makeNamespace());
-                            $this->ensureUse($errorFreeResult, ErrorFreeResult::class);
-                            $errorFreeResult->setExtends(ErrorFreeResult::class);
+            $setData = $result->addMethod('setData');
+            $setData->setVisibility('protected');
+            $dataParam = $setData->addParameter('data');
+            $this->ensureUse($result, stdClass::class);
+            $dataParam->setType(stdClass::class);
+            $setData->setReturnType('void');
+            $setData->setBody(<<<PHP
+            \$this->data = {$operationName}::fromStdClass(\$data);
+            PHP
+            );
 
-                            $errorFreeDataProp = $errorFreeResult->addProperty('data');
-                            $errorFreeDataProp->setType(
-                                $this->withCurrentNamespace($operationName)
-                            );
-                            $errorFreeDataProp->setNullable(false);
+            $dataProp = $result->addProperty('data');
+            $dataProp->setType(
+                $this->withCurrentNamespace($operationName)
+            );
+            $dataProp->setNullable(true);
 
-                            $this->operationStack                  = new OperationStack($operation);
-                            $this->operationStack->result          = $result;
-                            $this->operationStack->errorFreeResult = $errorFreeResult;
-                            $this->operationStack->pushSelection(
-                                $this->makeTypedObject($operationName)
-                            );
-                        },
-                        'leave' => function (OperationDefinitionNode $_): void {
-                            $execute = $this->operationStack->operation->getMethod('execute');
+            $errorFreeResultName = "{$operationName}ErrorFreeResult";
 
-                            $parameters    = $execute->getParameters();
-                            $addDocComment = false;
-                            foreach ($parameters as $parameter) {
-                                if ($parameter->getType() === 'array') {
-                                    $addDocComment = true;
-                                    break;
-                                }
-                            }
+            $errorFree = $result->addMethod('errorFree');
+            $errorFree->setVisibility('public');
+            $errorFree->setReturnType(
+                $this->withCurrentNamespace($errorFreeResultName)
+            );
+            $errorFree->setBody(<<<PHP
+            return {$errorFreeResultName}::fromResult(\$this);
+            PHP
+            );
 
-                            if (! $addDocComment) {
-                                $execute->setComment(null);
-                            }
+            $errorFreeResult = new ClassType($errorFreeResultName, $this->makeNamespace());
+            $this->ensureUse($errorFreeResult, ErrorFreeResult::class);
+            $errorFreeResult->setExtends(ErrorFreeResult::class);
 
-                            // Store the current operation as we continue with the next one
-                            foreach ($this->operationStack->classes() as $class) {
-                                $this->classes [] = $class;
-                            }
-                        },
-                    ],
-                    NodeKind::VARIABLE_DEFINITION  => [
-                        'enter' => function (VariableDefinitionNode $variableDefinition) use ($typeInfo): void {
-                            $parameter = new Parameter($variableDefinition->variable->name->value);
+            $errorFreeDataProp = $errorFreeResult->addProperty('data');
+            $errorFreeDataProp->setType(
+                $this->withCurrentNamespace($operationName)
+            );
+            $errorFreeDataProp->setNullable(false);
 
-                            if ($variableDefinition->defaultValue !== null) {
-                                // TODO support default values
-                            }
+            $this->operationStack                  = new OperationStack($operation);
+            $this->operationStack->result          = $result;
+            $this->operationStack->errorFreeResult = $errorFreeResult;
+            $this->operationStack->pushSelection(
+                $this->makeTypedObject($operationName)
+            );
+        };
+    }
 
-                            /** @var Type & InputType $type */
-                            $type = $typeInfo->getInputType();
+    /**
+     * @return Closure
+     */
+    protected function onLeaveOperationDefinition(): Closure
+    {
+        return function (OperationDefinitionNode $_): void {
+            $execute = $this->operationStack->operation->getMethod('execute');
 
-                            if ($type instanceof NonNull) {
-                                $type = $type->getWrappedType();
-                            } else {
-                                $parameter->setNullable();
-                                $parameter->setDefaultValue(null);
-                            }
+            $parameters    = $execute->getParameters();
+            $addDocComment = false;
+            foreach ($parameters as $parameter) {
+                if ($parameter->getType() === 'array') {
+                    $addDocComment = true;
+                    break;
+                }
+            }
 
-                            if ($type instanceof ListOfType) {
-                                $parameter->setType('array');
+            if (! $addDocComment) {
+                $execute->setComment(null);
+            }
 
-                                $namedType = Type::getNamedType($type);
-                                $parameter->setType('array');
+            // Store the current operation as we continue with the next one
+            foreach ($this->operationStack->classes() as $class) {
+                $this->classes [] = $class;
+            }
+        };
+    }
 
-                                if ($namedType instanceof ScalarType) {
-                                    $typeReference = PhpType::forScalar($namedType);
-                                } elseif ($namedType instanceof EnumType) {
-                                    $typeReference = PhpType::forEnum($namedType);
-                                } elseif ($namedType instanceof InputObjectType) {
-                                    $typeReference = $this->makeInput($namedType);
-                                    $this->ensureUse($this->operationStack->operation, $typeReference);
-                                } else {
-                                    throw new Exception('Unsupported type: ' . get_class($type));
-                                }
-                            } elseif ($type instanceof ScalarType) {
-                                $typeReference = PhpType::forScalar($type);
-                                $parameter->setType($typeReference);
-                            } elseif ($type instanceof EnumType) {
-                                $enumAdapter   = $this->endpointConfig->enumAdapter();
-                                $typeReference = $enumAdapter->typeHint($this->types[$type->name], $type);
-                                $parameter->setType($typeReference);
-                            } elseif ($type instanceof InputObjectType) {
-                                $typeReference = $this->makeInput($type);
-                                $this->ensureUse($this->operationStack->operation, $typeReference);
-                                $parameter->setType($typeReference);
-                            } else {
-                                throw new Exception('Unsupported type: ' . get_class($type));
-                            }
+    /**
+     * @param TypeInfo $typeInfo
+     *
+     * @return Closure
+     */
+    protected function onEnterVariableDefinition(TypeInfo $typeInfo): Closure
+    {
+        return function (VariableDefinitionNode $variableDefinition) use ($typeInfo): void {
+            $parameter = new Parameter($variableDefinition->variable->name->value);
 
-                            $typeParts = explode('\\', $typeReference);
-                            $typeDoc   = PhpType::phpDoc($type, array_pop($typeParts));
-                            $execute   = $this->operationStack->operation->getMethod('execute');
-                            $comment   = $execute->getComment();
-                            $comment   .= "@parameter {$typeDoc} \${$parameter->getName()}\n";
-                            $execute->setComment($comment);
+            if ($variableDefinition->defaultValue !== null) {
+                // TODO support default values
+            }
 
-                            $this->operationStack->addParameterToOperation($parameter);
-                        },
-                    ],
-                    NodeKind::FIELD                => [
-                        'enter' => function (FieldNode $field) use ($typeInfo): void {
-                            // We are only interested in the name that will come from the server
-                            $fieldName = $field->alias !== null
-                                ? $field->alias->value
-                                : $field->name->value;
+            /** @var Type & InputType $type */
+            $type = $typeInfo->getInputType();
 
-                            if ($fieldName === '__typename') {
-                                return;
-                            }
+            if ($type instanceof NonNull) {
+                $type = $type->getWrappedType();
+            } else {
+                $parameter->setNullable();
+                $parameter->setDefaultValue(null);
+            }
 
-                            $selection = $this->operationStack->peekSelection();
+            if ($type instanceof ListOfType) {
+                $parameter->setType('array');
 
-                            /** @var Type & OutputType $type */
-                            $type = $typeInfo->getType();
-                            /** @var Type $namedType */
-                            $namedType = Type::getNamedType($type);
+                $namedType = Type::getNamedType($type);
+                $parameter->setType('array');
 
-                            /** @var ObjectType|InterfaceType|UnionType $parent */
-                            $parent    = $typeInfo->getParentType();
-                            $namedType = Type::getNamedType($type);
-                            if ($namedType instanceof InterfaceType) {
-                                foreach ($parent->getInterfaces() as $interface) {
-                                    if ($interface->hasField($field->name->value)) {
-                                        $selection->addImplement($interface->name);
-                                        // return;
-                                    }
-                                }
-                            }
+                if ($namedType instanceof ScalarType) {
+                    $typeReference = PhpType::forScalar($namedType);
+                } elseif ($namedType instanceof EnumType) {
+                    $typeReference = PhpType::forEnum($namedType);
+                } elseif ($namedType instanceof InputObjectType) {
+                    $typeReference = $this->makeInput($namedType);
+                    $this->ensureUse($this->operationStack->operation, $typeReference);
+                } else {
+                    throw new Exception('Unsupported type: ' . get_class($type));
+                }
+            } elseif ($type instanceof ScalarType) {
+                $typeReference = PhpType::forScalar($type);
+                $parameter->setType($typeReference);
+            } elseif ($type instanceof EnumType) {
+                $enumAdapter = $this->endpointConfig->enumAdapter();
 
-                            /*if () {
-                                $typedObjectName = ucfirst($fieldName);
+                $typeReference = $enumAdapter->typeHint($this->types[$type->name], $type->astNode);
+                $parameter->setType($typeReference);
+            } elseif ($type instanceof InputObjectType) {
+                $typeReference = $this->makeInput($type);
+                $this->ensureUse($this->operationStack->operation, $typeReference);
+                $parameter->setType($typeReference);
+            } else {
+                throw new Exception('Unsupported type: ' . get_class($type));
+            }
 
-                                // We go one level deeper into the selection set
-                                // To avoid naming conflicts, we add on another namespace
-                                $this->namespaceStack [] = $typedObjectName;
-                                $typeReference           = "\\{$this->withCurrentNamespace($typedObjectName)}";
+            $typeParts = explode('\\', $typeReference);
+            $typeDoc   = PhpType::phpDoc($type, array_pop($typeParts));
+            $execute   = $this->operationStack->operation->getMethod('execute');
+            $comment   = $execute->getComment();
+            $comment   .= "@parameter {$typeDoc} \${$parameter->getName()}\n";
+            $execute->setComment($comment);
 
-                                $selectionClass = $this->makeTypedObject($typedObjectName, true);
-                                $this->operationStack->pushSelection(
-                                    $selectionClass
-                                );
-                                $this->ensureUse($selection, TypedObject::class);
-                                $this->ensureUse($selection, $typeReference);
-                                $this->ensureUse($selection, stdClass::class);
-                                $typeMapper = <<<PHP
-                                static function (stdClass \$value): TypedObject {
-                                    return {$typedObjectName}::fromStdClass(\$value);
-                                }
-                                PHP;
-                            } else*/
-                            if ($namedType instanceof ObjectType || $namedType instanceof InterfaceType) {
-                                $typedObjectName = ucfirst($fieldName);
+            $this->operationStack->addParameterToOperation($parameter);
+        };
+    }
 
-                                // We go one level deeper into the selection set
-                                // To avoid naming conflicts, we add on another namespace
-                                $this->namespaceStack [] = $typedObjectName;
-                                $typeReference           = "\\{$this->withCurrentNamespace($typedObjectName)}";
+    /**
+     * @param TypeInfo $typeInfo
+     *
+     * @return Closure
+     */
+    protected function onEnterField(TypeInfo $typeInfo): Closure
+    {
+        return function (FieldNode $field) use ($typeInfo): void {
+            // We are only interested in the name that will come from the server
+            $fieldName = $field->alias !== null
+                ? $field->alias->value
+                : $field->name->value;
 
-                                $selectionClass = $this->makeTypedObject($typedObjectName);
-                                $this->operationStack->pushSelection(
-                                    $selectionClass
-                                );
-                                $this->ensureUse($selection, TypedObject::class);
-                                $this->ensureUse($selection, $typeReference);
-                                $this->ensureUse($selection, stdClass::class);
-                                $typeMapper = <<<PHP
-                                static function (stdClass \$value): TypedObject {
-                                    return {$typedObjectName}::fromStdClass(\$value);
-                                }
-                                PHP;
+            if ($fieldName === '__typename') {
+                return;
+            }
 
-                                if ($namedType instanceof InterfaceType) {
-                                    $interfacedTypeMapper = <<<PHP
-                                    static function (stdClass \$value): TypedObject {
-                                        switch (\$value->__typename) {
-                                    PHP;
-                                    $subTypes             = [];
-                                    foreach ($field->selectionSet->selections as $subSelection) {
-                                        if ($subSelection instanceof InlineFragmentNode) {
-                                            $subTypes [] = $subSelection->typeCondition->name->value;
-                                            $this->ensureUse($selection, $this->currentNamespace() . '\\' . $subSelection->typeCondition->name->value);
-                                            $interfacedTypeMapper .= <<<PHP
+            $selection = $this->operationStack->peekSelection();
 
-                                                case '{$subSelection->typeCondition->name->value}':
-                                                    return {$subSelection->typeCondition->name->value}::fromStdClass(\$value);
-                                        PHP;
-                                        }
-                                    }
-                                    $subTypes             = implode(', ', $subTypes);
-                                    $interfacedTypeMapper .= <<<PHP
+            /** @var Type & OutputType $type */
+            $type = $typeInfo->getType();
+            /** @var Type $namedType */
+            $namedType = Type::getNamedType($type);
 
-                                            default:
-                                                return {$typedObjectName}::fromStdClass(\$value);
-                                        }
-                                    }
-                                    PHP;
+            /** @var ObjectType|InterfaceType $parent */
+            $parent = $typeInfo->getParentType();
 
-                                    if (! empty($subTypes)) {
-                                        $typeMapper = $interfacedTypeMapper;
-                                    }
-                                }
-                            } elseif ($namedType instanceof ScalarType) {
-                                $typeReference = PhpType::forScalar($namedType);
-                                $this->ensureUse($selection, DirectMapper::class);
-                                $typeMapper = <<<PHP
-                                new DirectMapper()
-                                PHP;
-                            } elseif ($namedType instanceof EnumType) {
-                                $typeReference = PhpType::forEnum($namedType);
-                                $this->ensureUse($selection, DirectMapper::class);
-                                // TODO consider mapping from enum instances
-                                $typeMapper = <<<PHP
-                                new DirectMapper()
-                                PHP;
-                            } else {
-                                throw new Exception('Unsupported type ' . get_class($namedType) . ' found.');
-                            }
+            if ($namedType instanceof InterfaceType) {
+                foreach ($parent->getInterfaces() as $interface) {
+                    if ($interface->hasField($field->name->value)) {
+                        $selection->addImplement($interface->name);
+                    }
+                }
+            }
 
-                            $fieldProperty = $selection->addProperty($fieldName);
-                            $fieldProperty->setProtected();
-                            $typeParts = explode('\\', $typeReference);
-                            if ($type instanceof ListOfType || ($type instanceof NonNull && $type->getWrappedType() instanceof ListOfType)) {
-                                $fieldProperty->setComment('@var ' . PhpType::phpDoc($type, array_pop($typeParts)));
-                                $fieldProperty->setType('array');
-                            } else {
-                                $fieldProperty->setType($typeReference);
-                            }
+            if ($namedType instanceof ObjectType || $namedType instanceof InterfaceType) {
+                $typedObjectName = ucfirst($fieldName);
 
-                            $fieldProperty->setNullable(! $type instanceof NonNull);
+                // We go one level deeper into the selection set
+                // To avoid naming conflicts, we add on another namespace
+                $this->namespaceStack [] = $typedObjectName;
+                $typeReference           = "\\{$this->withCurrentNamespace($typedObjectName)}";
 
-                            $fieldTypeMapper = $selection->addMethod(FieldTypeMapper::methodName($fieldName));
-                            $fieldTypeMapper->setReturnType('callable');
-                            $fieldTypeMapper->setBody(<<<PHP
-                            return {$typeMapper};
-                            PHP
-                            );
+                $selectionClass = $this->makeTypedObject($typedObjectName);
+                $this->operationStack->pushSelection(
+                    $selectionClass
+                );
+                $this->ensureUse($selection, TypedObject::class);
+                $this->ensureUse($selection, $typeReference);
+                $this->ensureUse($selection, stdClass::class);
+                $typeMapper = <<<PHP
+                static function (stdClass \$value): TypedObject {
+                    return {$typedObjectName}::fromStdClass(\$value);
+                }
+                PHP;
 
-                            $this->createAccessor($selection, $fieldName, $fieldProperty);
-                        },
-                    ],
-                    NodeKind::FRAGMENT_SPREAD      => [
-                        'enter' => function (FragmentSpreadNode $fragmentSpread) use ($definitions): void {
-                            $fragmentName = $fragmentSpread->name->value;
-                            /** @var FragmentDefinitionNode $fragmentDefinition */
-                            $fragmentDefinition = $definitions[$fragmentName];
+                if ($namedType instanceof InterfaceType) {
+                    $interfacedTypeMapper = <<<PHP
+                    static function (stdClass \$value): TypedObject {
+                        switch (\$value->__typename) {
+                    PHP;
+                    $subTypes             = [];
+                    foreach ($field->selectionSet->selections as $subSelection) {
+                        if ($subSelection instanceof InlineFragmentNode) {
+                            $subTypes [] = $subSelection->typeCondition->name->value;
+                            $this->ensureUse($selection, $this->currentNamespace() . '\\' . $subSelection->typeCondition->name->value);
+                            $interfacedTypeMapper .= <<<PHP
 
-                            dd($fragmentDefinition);
-                            // TODO handle the new selection set
-                        },
-                    ],
-                    NodeKind::INLINE_FRAGMENT      => [
-                        'enter' => function (InlineFragmentNode $fragmentSpread) use ($definitions, $typeInfo): void {
-                            /** @var Type $type */
-                            $type                   = $typeInfo->getType();
-                            $typedObjectName        = ucfirst($type->name);
-                            $this->namespaceStack[] = null;//$typedObjectName;
+                                    case '{$subSelection->typeCondition->name->value}':
+                                        return {$subSelection->typeCondition->name->value}::fromStdClass(\$value);
+                            PHP;
+                        }
+                    }
+                    $subTypes             = implode(', ', $subTypes);
+                    $interfacedTypeMapper .= <<<PHP
 
-                            $selectionClass = new ClassType($typedObjectName, $this->makeNamespace());
-                            $parent         = $this->operationStack->peekSelection();
-                            $name           = $parent->getNamespace()->getName() . '\\' . $parent->getName();
-                            $selectionClass->addExtend($name);
-                            $this->operationStack->pushSelection(
-                                $selectionClass
-                            );
-                        },/*
-                        'leave' => function(){
-                            $this->operationStack->popSelection();
-                        }*/
-                    ],
-                    NodeKind::SELECTION_SET        => [
-                        'leave' => function (SelectionSetNode $_): void {
-                            // We are done with building this subtree of the selection set,
-                            // so we move the top-most element to the storage
-                            $this->operationStack->popSelection();
+                            default:
+                                return {$typedObjectName}::fromStdClass(\$value);
+                        }
+                    }
+                    PHP;
 
-                            // The namespace moves up a level
-                            array_pop($this->namespaceStack);
-                        },
-                    ],
-                ]
-            )
-        );
+                    if (! empty($subTypes)) {
+                        $typeMapper = $interfacedTypeMapper;
+                    }
+                }
+            } elseif ($namedType instanceof ScalarType) {
+                $typeReference = PhpType::forScalar($namedType);
+                $this->ensureUse($selection, DirectMapper::class);
+                $typeMapper = <<<PHP
+                new DirectMapper()
+                PHP;
+            } elseif ($namedType instanceof EnumType) {
+                $enumClass = $this->getFQN($this->types[$namedType->name]);
 
-        return array_merge($this->types, $this->classes);
+                $enumAdapter = $this->endpointConfig->enumAdapter();
+
+                $typeReference = $enumAdapter->typeHint($this->types[$namedType->name], $namedType->astNode);
+
+                $this->ensureUse($selection, DirectMapper::class);
+                $this->ensureUse($selection, Configuration::class);
+                // TODO consider mapping from enum instances
+                $typeMapper = <<<PHP
+                static function (\$value) {
+                    return Configuration::endpoint('$this->endpoint')->enumAdapter()->parse(\$value, '$enumClass');
+                }
+                PHP;
+            } else {
+                throw new Exception('Unsupported type ' . get_class($namedType) . ' found.');
+            }
+
+            $fieldProperty = $selection->addProperty($fieldName);
+            $fieldProperty->setProtected();
+            $typeParts = explode('\\', $typeReference);
+            if ($type instanceof ListOfType || ($type instanceof NonNull && $type->getWrappedType() instanceof ListOfType)) {
+                $fieldProperty->setComment('@var ' . PhpType::phpDoc($type, array_pop($typeParts)));
+                $fieldProperty->setType('array');
+            } else {
+                $fieldProperty->setType($typeReference);
+            }
+
+            $fieldProperty->setNullable(! $type instanceof NonNull);
+
+            $fieldTypeMapper = $selection->addMethod(FieldTypeMapper::methodName($fieldName));
+            $fieldTypeMapper->setReturnType('callable');
+            $fieldTypeMapper->setBody(<<<PHP
+            return {$typeMapper};
+            PHP
+            );
+
+            $this->createAccessor($selection, $fieldName, $fieldProperty);
+        };
+    }
+
+    /**
+     * @return Closure
+     */
+    protected function onEnterFragmentSpread(): Closure
+    {
+        return function (FragmentSpreadNode $fragmentSpread): void {
+            $fragmentName = $fragmentSpread->name->value;
+
+            $definition = $this->findDefinition($fragmentName, FragmentDefinitionNode::class);
+
+            if ($definition === null) {
+                throw new Exception("Unknown definition used {$fragmentName}");
+            }
+
+            $fragmentDefinition = $definition;
+            $typeInfo           = new TypeInfo($this->schema);
+            $typeInfo->enter($fragmentDefinition);
+            $this->namespaceStack[] = null;
+            $this->operationStack->pushSelection(
+                $this->operationStack->peekSelection()
+            );
+            Visitor::visit($fragmentDefinition, Visitor::visitWithTypeInfo($typeInfo, $this->makeVisitor($typeInfo, false)));
+        };
+    }
+
+    /**
+     * @param TypeInfo $typeInfo
+     *
+     * @return Closure
+     */
+    protected function onEnterInlineFragment(TypeInfo $typeInfo): Closure
+    {
+        return function (InlineFragmentNode $fragmentSpread) use ($typeInfo): void {
+            /** @var Type $type */
+            $type                   = $typeInfo->getType();
+            $typedObjectName        = ucfirst($type->name);
+            $this->namespaceStack[] = null;
+
+            $selectionClass = new ClassType($typedObjectName, $this->makeNamespace());
+            $parent         = $this->operationStack->peekSelection();
+            $name           = $parent->getNamespace()->getName() . '\\' . $parent->getName();
+            $selectionClass->addExtend($name);
+            $this->operationStack->pushSelection(
+                $selectionClass
+            );
+        };
+    }
+
+    /**
+     * @param TypeInfo $typeInfo
+     *
+     * @return Closure
+     */
+    protected function onLeaveSelectionSet(TypeInfo $typeInfo): Closure
+    {
+        return function (SelectionSetNode $_): void {
+            // We are done with building this subtree of the selection set,
+            // so we move the top-most element to the storage
+            $this->operationStack->popSelection();
+
+            // The namespace moves up a level
+            array_pop($this->namespaceStack);
+        };
     }
 
     protected function makeTypedObject(string $name, bool $asInterface = false): ClassType
@@ -522,7 +546,7 @@ class ClassGenerator
     protected function defineTypeClasses(): void
     {
         foreach ($this->schema->getTypeMap() as $type) {
-            if ($type instanceof EnumType && $type->astNode) {
+            if ($type instanceof EnumType && ! is_null($type->astNode)) {
                 $this->types[$type->name] = $this->defineEnumTypeClass($type);
             }
         }
@@ -573,7 +597,6 @@ class ClassGenerator
 
             $fieldType = $field->getType();
 
-            // dd($fieldType);
             if ($fieldType instanceof NonNull) {
                 $fieldType = $fieldType->getWrappedType();
             } else {
@@ -594,7 +617,6 @@ class ClassGenerator
                 $property->setType(PhpType::forEnum($fieldType));
             } elseif ($fieldType instanceof InputObjectType) {
                 $typeReference = $this->makeInput($fieldType);
-                // $this->ensureUse($this->operationStack->operation, $typeReference);
                 $property->setType($typeReference);
             } else {
                 throw new Exception('Unsupported type: ' . get_class($fieldType));
@@ -616,7 +638,9 @@ class ClassGenerator
      */
     protected function createSetter(ClassType $classType, string $fieldName, Property $property): void
     {
-        $setter = $classType->addMethod('set' . ucfirst($fieldName))->setReturnType($classType->getNamespace()->getName() . '\\' . $classType->getName());
+        $setter = $classType
+            ->addMethod('set' . ucfirst($fieldName))
+            ->setReturnType($classType->getNamespace()->getName() . '\\' . $classType->getName());
         $setter->addParameter($fieldName)->setType($property->getType())->setNullable($property->isNullable());
 
         if (! $classType->isInterface()) {
@@ -646,6 +670,7 @@ class ClassGenerator
             ->addMethod(($property->getType() === 'bool' ? 'is' : 'get') . ucfirst($fieldName))
             ->setReturnType($property->getType())
             ->setReturnNullable($property->isNullable());
+
         if (! $classType->isInterface()) {
             $accessor->setBody(<<<PHP
                 return \$this->{$fieldName};
@@ -658,5 +683,114 @@ class ClassGenerator
 
             $accessor->setComment("@return {$typeDoc}");
         }
+    }
+
+    /**
+     * @param TypeInfo $typeInfo
+     *
+     * @return array
+     */
+    protected function makeVisitor(TypeInfo $typeInfo, bool $skipFragments = true): array
+    {
+        return [
+            // A named operation, e.g. "mutation FooMutation", maps to a class
+            NodeKind::OPERATION_DEFINITION => [
+                'enter' => $this->onEnterOperationDefinition(),
+                'leave' => $this->onLeaveOperationDefinition(),
+            ],
+            NodeKind::VARIABLE_DEFINITION  => [
+                'enter' => $this->onEnterVariableDefinition($typeInfo),
+            ],
+            NodeKind::FIELD                => [
+                'enter' => $this->onEnterField($typeInfo),
+            ],
+            NodeKind::FRAGMENT_SPREAD      => [
+                'enter' => $this->onEnterFragmentSpread(),
+            ],
+            NodeKind::FRAGMENT_DEFINITION  => $skipFragments ? [
+                'enter' => function (): VisitorOperation {
+                    $operation             = new VisitorOperation();
+                    $operation->doContinue = true;
+
+                    return $operation;
+                },
+            ] : [],
+            NodeKind::INLINE_FRAGMENT      => [
+                'enter' => $this->onEnterInlineFragment($typeInfo),
+            ],
+            NodeKind::SELECTION_SET        => [
+                'leave' => $this->onLeaveSelectionSet($typeInfo),
+            ],
+        ];
+    }
+
+    /**
+     * @param NodeList $nodeList
+     *
+     * @return Closure
+     */
+    protected function onEnterSelectionSet(NodeList $nodeList): Closure
+    {
+        return function (SelectionSetNode $node) use ($nodeList): void {
+            foreach ($node->selections as $selection) {
+                if ($selection instanceof InlineFragmentNode) {
+                    $fieldNode        = new FieldNode([
+                        'name'         => new NameNode([
+                            'value' => '__typename',
+                            'loc'   => null,
+                        ]),
+                        'arguments'    => new NodeList([]),
+                        'directives'   => new NodeList([]),
+                        'selectionSet' => null,
+                        'loc'          => null,
+                    ]);
+                    $node->selections = $node->selections->merge([$fieldNode]);
+                }
+
+                if ($selection instanceof FragmentSpreadNode) {
+                    $fragmentName = $selection->name->value;
+
+                    $definition = $this->findDefinition($fragmentName, FragmentDefinitionNode::class);
+
+                    if ($definition === null) {
+                        throw new Exception("Unknown definition used {$fragmentName}");
+                    }
+
+                    $nodeList[] = $definition;
+                    Visitor::visit($definition, [
+                        NodeKind::SELECTION_SET => [
+                            'enter' => $this->onEnterSelectionSet($nodeList),
+                        ],
+                    ]);
+                }
+            }
+        };
+    }
+
+    /**
+     * @param string      $name
+     * @param string|null $type
+     *
+     * @return Node|null
+     */
+    private function findDefinition(string $name, string $type = null): ?Node
+    {
+        foreach ($this->definitions as $definition) {
+            if ($definition->name->value === $name && ($type === null || $definition instanceof $type)) {
+                return $definition;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param ClassType $classType
+     *
+     * @return string
+     */
+    protected function getFQN(ClassType $classType): string
+    {
+        return $classType->getNamespace()->getName() . '\\' . $classType->getName();
     }
 }
