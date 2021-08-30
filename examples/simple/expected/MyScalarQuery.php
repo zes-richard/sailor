@@ -10,7 +10,7 @@ class MyScalarQuery extends Operation
 {
     public static function execute(?string $arg = null): MyScalarQuery\MyScalarQueryResult
     {
-        return self::executeOperation(...func_get_args());
+        return self::executeOperation($arg);
     }
 
     public static function document(): string

@@ -6,8 +6,22 @@ trait InputSerializer
 {
     public function jsonSerialize()
     {
-        return array_filter(get_object_vars($this), static function ($value) {
-            return is_null($value);
-        });
+        $variables = get_object_vars($this);
+
+        $jsonVariables = [];
+        foreach ($variables as $name => $value) {
+            if (is_null($value)) {
+                continue;
+            }
+
+            $serializer = [$this, "get" . ucfirst($name) . 'Serialized'];
+            if (is_callable($serializer)) {
+                $value = $serializer($value);
+            }
+
+            $jsonVariables[$name] = $value;
+        }
+
+        return $jsonVariables;
     }
 }

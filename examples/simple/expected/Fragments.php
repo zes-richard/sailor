@@ -10,7 +10,7 @@ class Fragments extends Operation
 {
     public static function execute(): Fragments\FragmentsResult
     {
-        return self::executeOperation(...func_get_args());
+        return self::executeOperation();
     }
 
     public static function document(): string

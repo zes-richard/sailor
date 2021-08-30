@@ -131,7 +131,7 @@ class ClassGenerator
 
             $execute->setReturnType($resultClass);
             $execute->setBody(<<<'PHP'
-            return self::executeOperation(...func_get_args());
+            return self::executeOperation();
             PHP
             );
 
@@ -269,8 +269,6 @@ class ClassGenerator
             }
 
             if ($type instanceof ListOfType) {
-                $parameter->setType('array');
-
                 $namedType = Type::getNamedType($type);
                 $parameter->setType('array');
 
@@ -284,8 +282,17 @@ class ClassGenerator
                 } else {
                     throw new Exception('Unsupported type: ' . get_class($type));
                 }
+            } elseif ($type instanceof CustomScalarType) {
+                $typeReference = $this->endpointConfig->scalarAdapter($type->name)->typeHint();
+
+                if (class_exists($typeReference)) {
+                    $this->ensureUse($this->operationStack->operation, $typeReference);
+                }
+
+                $parameter->setType($typeReference);
             } elseif ($type instanceof ScalarType) {
                 $typeReference = PhpType::forScalar($type);
+
                 $parameter->setType($typeReference);
             } elseif ($type instanceof EnumType) {
                 $enumAdapter = $this->endpointConfig->enumAdapter();
@@ -300,14 +307,7 @@ class ClassGenerator
                 throw new Exception('Unsupported type: ' . get_class($type));
             }
 
-            $typeParts = explode('\\', $typeReference);
-            $typeDoc   = PhpType::phpDoc($type, array_pop($typeParts));
-            $execute   = $this->operationStack->operation->getMethod('execute');
-            $comment   = $execute->getComment();
-            $comment   .= "@parameter {$typeDoc} \${$parameter->getName()}\n";
-            $execute->setComment($comment);
-
-            $this->operationStack->addParameterToOperation($parameter);
+            $this->operationStack->addParameterToOperation($parameter, $type, $typeReference);
         };
     }
 
@@ -397,6 +397,19 @@ class ClassGenerator
                         $typeMapper = $interfacedTypeMapper;
                     }
                 }
+            } elseif ($namedType instanceof CustomScalarType) {
+                $typeReference = $this->endpointConfig->scalarAdapter($type->name)->typeHint();
+
+                if (class_exists($typeReference)) {
+                    $this->ensureUse($selection, $typeReference);
+                }
+
+                $this->ensureUse($selection, Configuration::class);
+                $typeMapper = <<<PHP
+                static function (\$value) {
+                    return Configuration::endpoint('{$this->endpoint}')->scalarAdapter('{$type->name}')->parse(\$value);
+                }
+                PHP;
             } elseif ($namedType instanceof ScalarType) {
                 $typeReference = PhpType::forScalar($namedType);
                 $this->ensureUse($selection, DirectMapper::class);
@@ -410,9 +423,7 @@ class ClassGenerator
 
                 $typeReference = $enumAdapter->typeHint($this->types[$namedType->name], $namedType->astNode);
 
-                $this->ensureUse($selection, DirectMapper::class);
                 $this->ensureUse($selection, Configuration::class);
-                // TODO consider mapping from enum instances
                 $typeMapper = <<<PHP
                 static function (\$value) {
                     return Configuration::endpoint('$this->endpoint')->enumAdapter()->parse(\$value, '$enumClass');
@@ -606,13 +617,16 @@ class ClassGenerator
 
             if ($fieldType instanceof ListOfType) {
                 $property->setType('array');
-            } elseif ($fieldType instanceof ScalarType) {
-                if ($fieldType instanceof CustomScalarType && class_exists('\\' . $fieldType->name)) {
-                    $this->ensureUse($inputObject, '\\' . $fieldType->name);
-                    $property->setType('\\' . $fieldType->name);
-                } else {
-                    $property->setType(PhpType::forScalar($fieldType));
+            } elseif ($fieldType instanceof CustomScalarType) {
+                $typeReference = $this->endpointConfig->scalarAdapter($fieldType->name)->typeHint();
+
+                if (class_exists($typeReference)) {
+                    $this->ensureUse($inputObject, $typeReference);
                 }
+
+                $property->setType($typeReference);
+            } elseif ($fieldType instanceof ScalarType) {
+                $property->setType(PhpType::forScalar($fieldType));
             } elseif ($fieldType instanceof EnumType) {
                 $property->setType(PhpType::forEnum($fieldType));
             } elseif ($fieldType instanceof InputObjectType) {
@@ -624,6 +638,24 @@ class ClassGenerator
 
             $this->createAccessor($inputObject, $field->name, $property);
             $this->createSetter($inputObject, $field->name, $property);
+
+            if ($fieldType instanceof CustomScalarType) {
+                $this->ensureUse($inputObject, Configuration::class);
+                $setter = $inputObject
+                    ->addMethod(FieldSerializer::methodName($field->name))
+                    ->setReturnType('string');
+
+                $setter->setBody(<<<PHP
+                    return Configuration::endpoint('{$this->endpoint}')->scalarAdapter('{$fieldType->name}')->serialize(\$this->{$field->name});
+                PHP
+                );
+
+                if ($property->getComment()) {
+                    $typeDoc = str_replace('@var ', '', $property->getComment());
+
+                    $setter->setComment("@param {$typeDoc} \${$fieldName}\n\n@return {$classType->getName()}");
+                }
+            }
         }
 
         $this->types[$inputName] = $inputObject;

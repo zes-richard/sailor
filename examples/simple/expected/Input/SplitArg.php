@@ -6,6 +6,7 @@ namespace Spawnia\Sailor\Simple\Input;
 
 use DateTime;
 use JsonSerializable;
+use Spawnia\Sailor\Configuration;
 use Spawnia\Sailor\InputSerializer;
 
 class SplitArg implements JsonSerializable
@@ -37,5 +38,10 @@ class SplitArg implements JsonSerializable
         $this->created = $created;
 
         return $this;
+    }
+
+    public function getCreatedSerialized(): string
+    {
+        return Configuration::endpoint('simple')->scalarAdapter('DateTime')->serialize($this->created);
     }
 }

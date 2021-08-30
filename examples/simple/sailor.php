@@ -3,13 +3,15 @@
 declare(strict_types=1);
 
 use Spawnia\Sailor\Client;
+use Spawnia\Sailor\Adapter\DateTimeScalarAdapter;
 use Spawnia\Sailor\EndpointConfig;
 use Spawnia\Sailor\Response;
+use Spawnia\Sailor\Adapter\ScalarAdapter;
+use Spawnia\Sailor\Adapter\StringScalarAdapter;
 use Spawnia\Sailor\Testing\MockClient;
 
 return [
-    'simple' => new class extends EndpointConfig
-    {
+    'simple' => new class extends EndpointConfig {
         public function namespace(): string
         {
             return 'Spawnia\Sailor\Simple';
@@ -17,17 +19,17 @@ return [
 
         public function targetPath(): string
         {
-            return __DIR__.'/generated';
+            return __DIR__ . '/generated';
         }
 
         public function searchPath(): string
         {
-            return __DIR__.'/src';
+            return __DIR__ . '/src';
         }
 
         public function schemaPath(): string
         {
-            return __DIR__.'/schema.graphqls';
+            return __DIR__ . '/schema.graphqls';
         }
 
         public function makeClient(): Client
@@ -45,6 +47,15 @@ return [
             };
 
             return $mockClient;
+        }
+
+        public function scalarAdapter(string $type): ScalarAdapter
+        {
+            if ($type === 'DateTime') {
+                return new DateTimeScalarAdapter();
+            }
+
+            return new StringScalarAdapter();
         }
     },
 ];

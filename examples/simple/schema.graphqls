@@ -10,6 +10,7 @@ type SomeObject implements SomeInterface {
     value: Int
     nested: SomeObject
     enum: SomeEnum
+    date: DateTime
     array1: [Int!]!
     array2: [SomeEnum]!
     array3: [SomeObject!]

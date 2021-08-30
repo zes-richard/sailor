@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Spawnia\Sailor\Codegen;
 
+use GraphQL\Type\Definition\CustomScalarType;
+use GraphQL\Type\Definition\Type;
 use Nette\PhpGenerator\ClassType;
+use Nette\PhpGenerator\Helpers;
 use Nette\PhpGenerator\Parameter;
+use Spawnia\Sailor\Configuration;
 
 class OperationStack
 {
@@ -54,12 +58,34 @@ class OperationStack
         return $selection;
     }
 
-    public function addParameterToOperation(Parameter $parameter): void
+    public function addParameterToOperation(Parameter $parameter, Type $type, string $typeReference): void
     {
-        $execute = $this->operation->getMethod('execute');
+        $typeParts = explode('\\', $typeReference);
+        $typeDoc   = PhpType::phpDoc($type, array_pop($typeParts));
 
-        $parameters = $execute->getParameters();
+        $execute       = $this->operation->getMethod('execute');
+        $parameterName = $parameter->getName();
+
+        $comment = $execute->getComment();
+        $comment .= "@parameter {$typeDoc} \${$parameterName}\n";
+        $execute->setComment($comment);
+
+        $parameters   = $execute->getParameters();
         $parameters[] = $parameter;
+
+        if ($type instanceof CustomScalarType) {
+            $phpNamespace = $this->operation->getNamespace();
+            if (! isset($phpNamespace->getUses()[Helpers::extractShortName(Configuration::class)])) {
+                $phpNamespace->addUse(Configuration::class);
+            }
+
+            $typeMapper    = "\${$parameterName}Serialized = Configuration::endpoint(self::endpoint())->scalarAdapter('{$type->name}')->serialize(\${$parameterName});\n\n";
+            $parameterName .= 'Serialized';
+
+            $execute->setBody($typeMapper . $execute->getBody());
+        }
+
+        $execute->setBody(substr($execute->getBody(), 0, -2) . (count($parameters) > 1 ? ', ' : '') . "\${$parameterName});");
 
         $execute->setParameters($parameters);
     }

@@ -10,7 +10,7 @@ class MyObjectNestedQuery extends Operation
 {
     public static function execute(): MyObjectNestedQuery\MyObjectNestedQueryResult
     {
-        return self::executeOperation(...func_get_args());
+        return self::executeOperation();
     }
 
     public static function document(): string

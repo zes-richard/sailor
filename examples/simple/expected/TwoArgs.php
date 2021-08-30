@@ -10,7 +10,7 @@ class TwoArgs extends Operation
 {
     public static function execute(?string $first = null, ?int $second = null): TwoArgs\TwoArgsResult
     {
-        return self::executeOperation(...func_get_args());
+        return self::executeOperation($first, $second);
     }
 
     public static function document(): string

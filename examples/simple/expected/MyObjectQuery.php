@@ -10,7 +10,7 @@ class MyObjectQuery extends Operation
 {
     public static function execute(): MyObjectQuery\MyObjectQueryResult
     {
-        return self::executeOperation(...func_get_args());
+        return self::executeOperation();
     }
 
     public static function document(): string
@@ -18,6 +18,7 @@ class MyObjectQuery extends Operation
         return /* @lang GraphQL */ 'query MyObjectQuery {
           singleObject {
             value
+            date
           }
         }';
     }

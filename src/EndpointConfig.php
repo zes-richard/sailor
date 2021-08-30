@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Spawnia\Sailor;
 
+use Spawnia\Sailor\Adapter\EnumAdapter;
+use Spawnia\Sailor\Adapter\ScalarAdapter;
+use Spawnia\Sailor\Adapter\StringEnumAdapter;
+use Spawnia\Sailor\Adapter\StringScalarAdapter;
+
 abstract class EndpointConfig
 {
     /**
@@ -34,5 +39,10 @@ abstract class EndpointConfig
     public function enumAdapter(): EnumAdapter
     {
         return new StringEnumAdapter();
+    }
+
+    public function scalarAdapter(string $type): ScalarAdapter
+    {
+        return new StringScalarAdapter();
     }
 }

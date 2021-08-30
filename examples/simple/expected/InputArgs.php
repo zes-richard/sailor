@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace Spawnia\Sailor\Simple;
 
+use DateTime;
+use Spawnia\Sailor\Configuration;
 use Spawnia\Sailor\Operation;
 use Spawnia\Sailor\Simple\Input\InputArg;
 
 class InputArgs extends Operation
 {
-    public static function execute(InputArg $first, string $secondString, string $date): InputArgs\InputArgsResult
+    public static function execute(InputArg $first, string $secondString, DateTime $date): InputArgs\InputArgsResult
     {
-        return self::executeOperation(...func_get_args());
+        $dateSerialized = Configuration::endpoint(self::endpoint())->scalarAdapter('DateTime')->serialize($date);
+
+        return self::executeOperation($first, $secondString, $dateSerialized);
     }
 
     public static function document(): string

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Spawnia\Sailor;
+namespace Spawnia\Sailor\Adapter;
 
 use GraphQL\Language\AST\EnumTypeDefinitionNode;
 use Nette\PhpGenerator\ClassType;

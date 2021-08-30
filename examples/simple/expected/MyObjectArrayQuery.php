@@ -21,7 +21,7 @@ class MyObjectArrayQuery extends Operation
         ?array $array3 = null,
         ?array $array4 = null
     ): MyObjectArrayQuery\MyObjectArrayQueryResult {
-        return self::executeOperation(...func_get_args());
+        return self::executeOperation($array1, $array2, $array3, $array4);
     }
 
     public static function document(): string
