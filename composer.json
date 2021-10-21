@@ -1,5 +1,5 @@
 {
-  "name": "spawnia/sailor",
+  "name": "core/sailor",
   "type": "library",
   "description": "A typesafe GraphQL client for PHP",
   "homepage": "https://github.com/spawnia/sailor",
@@ -8,6 +8,10 @@
     {
       "name": "Benedikt Franke",
       "email": "benedikt@franke.tech"
+    },
+    {
+      "name": "Zes Goes B.V.",
+      "email": "ict@zesgoes.nl"
     }
   ],
   "require": {
