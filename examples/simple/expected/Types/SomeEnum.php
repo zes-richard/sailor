@@ -6,8 +6,8 @@ namespace Spawnia\Sailor\Simple\Types;
 
 class SomeEnum
 {
-    const FOO = 'FOO';
+    public const FOO = 'FOO';
 
     /** Description for bar */
-    const BAR = 'BAR';
+    public const BAR = 'BAR';
 }

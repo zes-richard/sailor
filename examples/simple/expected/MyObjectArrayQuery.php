@@ -15,12 +15,8 @@ class MyObjectArrayQuery extends Operation
      * @parameter array<int, int>|null $array3
      * @parameter array<int, InputArg|null>|null $array4
      */
-    public static function execute(
-        array $array1,
-        array $array2,
-        ?array $array3 = null,
-        ?array $array4 = null
-    ): MyObjectArrayQuery\MyObjectArrayQueryResult {
+    public static function execute(array $array1, array $array2, ?array $array3 = null, ?array $array4 = null): MyObjectArrayQuery\MyObjectArrayQueryResult
+    {
         return self::executeOperation($array1, $array2, $array3, $array4);
     }
 

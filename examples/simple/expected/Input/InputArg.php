@@ -12,7 +12,9 @@ class InputArg implements JsonSerializable
     use InputSerializer;
 
     private int $integer;
+
     private string $someID;
+
     private ?SplitArg $nested = null;
 
     public function getInteger(): int

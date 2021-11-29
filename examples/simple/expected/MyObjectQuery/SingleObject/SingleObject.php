@@ -12,6 +12,7 @@ use Spawnia\Sailor\TypedObject;
 class SingleObject extends TypedObject
 {
     protected ?int $value;
+
     protected ?DateTime $date;
 
     public function valueTypeMapper(): callable

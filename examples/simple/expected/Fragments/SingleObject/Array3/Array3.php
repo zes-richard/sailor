@@ -11,6 +11,7 @@ use Spawnia\Sailor\TypedObject;
 class Array3 extends TypedObject
 {
     protected ?int $value;
+
     protected ?string $enum;
 
     public function valueTypeMapper(): callable

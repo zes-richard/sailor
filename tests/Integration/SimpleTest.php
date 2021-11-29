@@ -51,9 +51,9 @@ class SimpleTest extends TestCase
         $client = Mockery::mock(Client::class);
         $client->expects('request')
             ->once()
-            ->withArgs(function (string $query, \stdClass $variables): bool {
+            ->withArgs(function ($query, $variables): bool {
                 return $query === MyScalarQuery::document()
-                    && $variables == new \stdClass();
+                    && $variables == (object) ['arg' => null];
             })
             ->andReturn(Response::fromStdClass((object) [
                 'data' => (object) [
@@ -106,7 +106,7 @@ class SimpleTest extends TestCase
 
         MyScalarQuery::mock()
             ->expects('execute')
-            ->with()
+            ->with(null)
             ->andReturn(MyScalarQueryResult::fromStdClass((object) [
                 'data' => (object) [
                     'scalarWithArg' => $bar,
@@ -122,7 +122,7 @@ class SimpleTest extends TestCase
 
         MyScalarQuery::mock()
             ->expects('execute')
-            ->with()
+            ->with(null)
             ->andReturn(MyScalarQueryResult::fromStdClass((object) [
                 'data' => null,
                 'errors' => [

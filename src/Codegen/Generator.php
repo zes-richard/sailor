@@ -12,7 +12,6 @@ use GraphQL\Language\Parser;
 use GraphQL\Type\Schema;
 use GraphQL\Utils\BuildSchema;
 use Nette\PhpGenerator\ClassType;
-use Nette\PhpGenerator\PsrPrinter;
 use Nette\Utils\FileSystem;
 use Spawnia\Sailor\EndpointConfig;
 
@@ -96,7 +95,7 @@ class Generator
 
     protected static function asPhpFile(ClassType $classType): string
     {
-        $printer = new PsrPrinter();
+        $printer = new Printer();
         $phpNamespace = $classType->getNamespace();
         $class = $printer->printClass($classType, $phpNamespace);
 

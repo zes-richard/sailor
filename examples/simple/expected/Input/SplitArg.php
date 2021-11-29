@@ -14,6 +14,7 @@ class SplitArg implements JsonSerializable
     use InputSerializer;
 
     private string $string;
+
     private DateTime $created;
 
     public function getString(): string
