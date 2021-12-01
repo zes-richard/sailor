@@ -7,6 +7,7 @@ namespace Spawnia\Sailor;
 use GraphQL\Type\Introspection;
 use GraphQL\Utils\BuildClientSchema;
 use GraphQL\Utils\SchemaPrinter;
+use Safe\Exceptions\FilesystemException;
 
 class Introspector
 {
@@ -17,14 +18,21 @@ class Introspector
         $this->endpointConfig = $endpointConfig;
     }
 
-    public function introspect(): void
+    /**
+     * @param array<string, mixed> $options
+     *
+     * @throws ResultErrorsException|FilesystemException
+     */
+    public function introspect(array $options = []): void
     {
         $client = $this->endpointConfig->makeClient();
 
+        $optionsWithDefaults = array_merge([
+            'directiveIsRepeatable' => true,
+        ], $options);
+
         $introspectionResult = $client->request(
-            Introspection::getIntrospectionQuery([
-                'directiveIsRepeatable' => true,
-            ])
+            Introspection::getIntrospectionQuery($optionsWithDefaults)
         );
         $introspectionResult->assertErrorFree();
 
