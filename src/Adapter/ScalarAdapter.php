@@ -23,5 +23,5 @@ interface ScalarAdapter
      *
      * @param mixed $value
      */
-    public function serialize($value): string;
+    public function serialize($value): ?string;
 }

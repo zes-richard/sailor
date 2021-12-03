@@ -47,7 +47,7 @@ class DateTimeScalarAdapter implements ScalarAdapter
      *
      * @return string
      */
-    public function serialize($value): string
+    public function serialize($value): ?string
     {
         if (! $value instanceof DateTimeInterface) {
             return $value;

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Spawnia\Sailor\Codegen;
 
+use Iterator;
+
 class Finder
 {
     protected string $rootPath;
@@ -40,16 +42,17 @@ class Finder
         return $contents;
     }
 
-    protected function fileIterator(): \RegexIterator
+    protected function fileIterator(): Iterator
     {
-        $directory = new \RecursiveDirectoryIterator($this->rootPath);
-        $iterator = new \RecursiveIteratorIterator($directory);
-
-        return new \RegexIterator(
-            $iterator,
+        $finder = new \Symfony\Component\Finder\Finder();
+        $finder
+            ->files()
+            ->in($this->rootPath)
+            ->exclude('vendor/spawnia/sailor/**')
+            ->exclude('**/vendor/spawnia/sailor/**')
             // Look for all .graphql files
-            '/^.+\.graphql$/',
-            \RecursiveRegexIterator::MATCH
-        );
+            ->name('/^.+\.graphql$/');
+
+        return $finder->getIterator();
     }
 }
