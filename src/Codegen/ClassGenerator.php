@@ -407,7 +407,7 @@ class ClassGenerator
                 $this->ensureUse($selection, Configuration::class);
                 $typeMapper = <<<PHP
                 static function (\$value) {
-                    return Configuration::endpoint('{$this->endpoint}')->scalarAdapter('{$type->name}')->parse(\$value);
+                    return Configuration::endpoint('{$this->endpoint}')->scalarAdapter('{$namedType->name}')->parse(\$value);
                 }
                 PHP;
             } elseif ($namedType instanceof ScalarType) {
