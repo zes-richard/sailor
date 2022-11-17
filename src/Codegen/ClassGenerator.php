@@ -398,7 +398,7 @@ class ClassGenerator
                     }
                 }
             } elseif ($namedType instanceof CustomScalarType) {
-                $typeReference = $this->endpointConfig->scalarAdapter($type->name)->typeHint();
+                $typeReference = $this->endpointConfig->scalarAdapter($namedType->name)->typeHint();
 
                 if (class_exists($typeReference)) {
                     $this->ensureUse($selection, $typeReference);
