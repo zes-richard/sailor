@@ -6,18 +6,22 @@ namespace Spawnia\Sailor\Adapter;
 
 use DateTime;
 use DateTimeInterface;
+use DateTimeZone;
 use Safe\Exceptions\DatetimeException;
 
 class DateTimeScalarAdapter implements ScalarAdapter
 {
-    private string         $format;
+    private string $format;
 
-    private ?\DateTimeZone $dateTimeZone;
+    private ?DateTimeZone $dateTimeZone;
 
-    public function __construct(string $format = DateTimeInterface::ATOM, \DateTimeZone $dateTimeZone = null)
+    private bool $resetsAllFields;
+
+    public function __construct(string $format = DateTimeInterface::ATOM, DateTimeZone $dateTimeZone = null, bool $resetsAllFields = false)
     {
-        $this->format       = $format;
-        $this->dateTimeZone = $dateTimeZone;
+        $this->format          = $format;
+        $this->dateTimeZone    = $dateTimeZone;
+        $this->resetsAllFields = $resetsAllFields;
     }
 
     public function typeHint(): string
@@ -33,7 +37,13 @@ class DateTimeScalarAdapter implements ScalarAdapter
      */
     public function parse(string $value): ?DateTime
     {
-        $dateTime = DateTime::createFromFormat($this->format, $value, $this->dateTimeZone);
+        $format = $this->format;
+
+        if ($this->resetsAllFields) {
+            $format = '!' . $format;
+        }
+
+        $dateTime = DateTime::createFromFormat($format, $value, $this->dateTimeZone);
 
         if ($dateTime === false) {
             throw DatetimeException::createFromPhpError();
